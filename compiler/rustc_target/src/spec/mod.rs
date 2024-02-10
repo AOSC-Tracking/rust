@@ -1401,6 +1401,7 @@ supported_targets! {
     ("x86_64-unknown-linux-gnux32", x86_64_unknown_linux_gnux32),
     ("i686-unknown-linux-gnu", i686_unknown_linux_gnu),
     ("i586-unknown-linux-gnu", i586_unknown_linux_gnu),
+    ("i486-unknown-linux-gnu", i486_unknown_linux_gnu),
     ("loongarch64-unknown-linux-gnu", loongarch64_unknown_linux_gnu),
     ("m68k-unknown-linux-gnu", m68k_unknown_linux_gnu),
     ("csky-unknown-linux-gnuabiv2", csky_unknown_linux_gnuabiv2),
