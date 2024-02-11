@@ -11,7 +11,7 @@ use rustc_target::abi::{FieldIdx, VariantIdx};
 #[derive(Copy, Clone, Debug, TypeFoldable, TypeVisitable)]
 pub struct PlaceTy<'tcx> {
     pub ty: Ty<'tcx>,
-    /// Downcast to a particular variant of an enum or a generator, if included.
+    /// Downcast to a particular variant of an enum or a coroutine, if included.
     pub variant_index: Option<VariantIdx>,
 }
 
@@ -69,7 +69,7 @@ impl<'tcx> PlaceTy<'tcx> {
         param_env: ty::ParamEnv<'tcx>,
         elem: &ProjectionElem<V, T>,
         mut handle_field: impl FnMut(&Self, FieldIdx, T) -> Ty<'tcx>,
-        mut handle_opaque_cast: impl FnMut(&Self, T) -> Ty<'tcx>,
+        mut handle_opaque_cast_and_subtype: impl FnMut(&Self, T) -> Ty<'tcx>,
     ) -> PlaceTy<'tcx>
     where
         V: ::std::fmt::Debug,
@@ -110,7 +110,12 @@ impl<'tcx> PlaceTy<'tcx> {
                 PlaceTy { ty: self.ty, variant_index: Some(index) }
             }
             ProjectionElem::Field(f, fty) => PlaceTy::from_ty(handle_field(&self, f, fty)),
-            ProjectionElem::OpaqueCast(ty) => PlaceTy::from_ty(handle_opaque_cast(&self, ty)),
+            ProjectionElem::OpaqueCast(ty) => {
+                PlaceTy::from_ty(handle_opaque_cast_and_subtype(&self, ty))
+            }
+            ProjectionElem::Subtype(ty) => {
+                PlaceTy::from_ty(handle_opaque_cast_and_subtype(&self, ty))
+            }
         };
         debug!("projection_ty self: {:?} elem: {:?} yields: {:?}", self, elem, answer);
         answer
@@ -200,8 +205,8 @@ impl<'tcx> Rvalue<'tcx> {
                 }
                 AggregateKind::Adt(did, _, args, _, _) => tcx.type_of(did).instantiate(tcx, args),
                 AggregateKind::Closure(did, args) => Ty::new_closure(tcx, did, args),
-                AggregateKind::Generator(did, args, movability) => {
-                    Ty::new_generator(tcx, did, args, movability)
+                AggregateKind::Coroutine(did, args, movability) => {
+                    Ty::new_coroutine(tcx, did, args, movability)
                 }
             },
             Rvalue::ShallowInitBox(_, ty) => Ty::new_box(tcx, ty),

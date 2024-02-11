@@ -357,7 +357,9 @@ impl<'tcx> Validator<'_, 'tcx> {
                         return Err(Unpromotable);
                     }
 
-                    ProjectionElem::ConstantIndex { .. } | ProjectionElem::Subslice { .. } => {}
+                    ProjectionElem::ConstantIndex { .. }
+                    | ProjectionElem::Subtype(_)
+                    | ProjectionElem::Subslice { .. } => {}
 
                     ProjectionElem::Index(local) => {
                         let mut promotable = false;
@@ -968,7 +970,7 @@ pub fn promote_candidates<'tcx>(
             0,
             vec![],
             body.span,
-            body.generator_kind(),
+            body.coroutine_kind(),
             body.tainted_by_errors,
         );
         promoted.phase = MirPhase::Analysis(AnalysisPhase::Initial);

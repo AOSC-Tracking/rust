@@ -184,6 +184,8 @@ macro_rules! make_mir_visitor {
 
             visit_place_fns!($($mutability)?);
 
+            /// This is called for every constant in the MIR body and every `required_consts`
+            /// (i.e., including consts that have been dead-code-eliminated).
             fn visit_constant(
                 &mut self,
                 constant: & $($mutability)? ConstOperand<'tcx>,
@@ -471,7 +473,7 @@ macro_rules! make_mir_visitor {
                     TerminatorKind::Goto { .. } |
                     TerminatorKind::UnwindResume |
                     TerminatorKind::UnwindTerminate(_) |
-                    TerminatorKind::GeneratorDrop |
+                    TerminatorKind::CoroutineDrop |
                     TerminatorKind::Unreachable |
                     TerminatorKind::FalseEdge { .. } |
                     TerminatorKind::FalseUnwind { .. } => {}
@@ -733,12 +735,12 @@ macro_rules! make_mir_visitor {
                             ) => {
                                 self.visit_args(closure_args, location);
                             }
-                            AggregateKind::Generator(
+                            AggregateKind::Coroutine(
                                 _,
-                                generator_args,
+                                coroutine_args,
                                 _movability,
                             ) => {
-                                self.visit_args(generator_args, location);
+                                self.visit_args(coroutine_args, location);
                             }
                         }
 
@@ -815,7 +817,6 @@ macro_rules! make_mir_visitor {
                     ty,
                     user_ty,
                     source_info,
-                    internal: _,
                     local_info: _,
                 } = local_decl;
 
@@ -991,7 +992,7 @@ macro_rules! extra_body_methods {
 macro_rules! super_body {
     ($self:ident, $body:ident, $($mutability:ident, $invalidate:tt)?) => {
         let span = $body.span;
-        if let Some(gen) = &$($mutability)? $body.generator {
+        if let Some(gen) = &$($mutability)? $body.coroutine {
             if let Some(yield_ty) = $(& $mutability)? gen.yield_ty {
                 $self.visit_ty(
                     yield_ty,
@@ -1109,6 +1110,11 @@ macro_rules! visit_place_fns {
                     self.visit_ty(&mut new_ty, TyContext::Location(location));
                     if ty != new_ty { Some(PlaceElem::OpaqueCast(new_ty)) } else { None }
                 }
+                PlaceElem::Subtype(ty) => {
+                    let mut new_ty = ty;
+                    self.visit_ty(&mut new_ty, TyContext::Location(location));
+                    if ty != new_ty { Some(PlaceElem::Subtype(new_ty)) } else { None }
+                }
                 PlaceElem::Deref
                 | PlaceElem::ConstantIndex { .. }
                 | PlaceElem::Subslice { .. }
@@ -1175,7 +1181,9 @@ macro_rules! visit_place_fns {
             location: Location,
         ) {
             match elem {
-                ProjectionElem::OpaqueCast(ty) | ProjectionElem::Field(_, ty) => {
+                ProjectionElem::OpaqueCast(ty)
+                | ProjectionElem::Subtype(ty)
+                | ProjectionElem::Field(_, ty) => {
                     self.visit_ty(ty, TyContext::Location(location));
                 }
                 ProjectionElem::Index(local) => {
