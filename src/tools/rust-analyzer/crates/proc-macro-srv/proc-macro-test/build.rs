@@ -74,7 +74,8 @@ fn main() {
         // This can happen when `CARGO_TARGET_DIR` is set or global config forces all cargo
         // instance to use the same target directory.
         .arg("--target-dir")
-        .arg(&target_dir);
+        .arg(&target_dir)
+        .arg("--release");
 
     if let Ok(target) = std::env::var("TARGET") {
         cmd.args(["--target", &target]);
