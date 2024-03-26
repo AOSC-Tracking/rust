@@ -420,7 +420,7 @@ pub fn create_bcx<'a, 'cfg>(
 
     // TODO: In theory, Cargo should also dedupe the roots, but I'm uncertain
     // what heuristics to use in that case.
-    if build_config.mode == (CompileMode::Doc { deps: true }) {
+    if matches!(build_config.mode, CompileMode::Doc { deps: true, .. }) {
         remove_duplicate_doc(build_config, &units, &mut unit_graph);
     }
 
@@ -657,6 +657,18 @@ fn traverse_and_share(
     };
 
     let mut profile = unit.profile.clone();
+    if profile.strip.is_deferred() {
+        // If strip was not manually set, and all dependencies of this unit together
+        // with this unit have debuginfo turned off, we enable debuginfo stripping.
+        // This will remove pre-existing debug symbols coming from the standard library.
+        if !profile.debuginfo.is_turned_on()
+            && new_deps
+                .iter()
+                .all(|dep| !dep.unit.profile.debuginfo.is_turned_on())
+        {
+            profile.strip = profile.strip.strip_debuginfo();
+        }
+    }
 
     // If this is a build dependency, and it's not shared with runtime dependencies, we can weaken
     // its debuginfo level to optimize build times. We do nothing if it's an artifact dependency,
