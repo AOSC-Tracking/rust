@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.20.0)
+set(LLVM_SUBPROJECT_TITLE "LLD")
 
 if(NOT DEFINED LLVM_COMMON_CMAKE_UTILS)
   set(LLVM_COMMON_CMAKE_UTILS ${CMAKE_CURRENT_SOURCE_DIR}/../cmake)
@@ -187,25 +188,15 @@ if (NOT LLVM_INSTALL_TOOLCHAIN_ONLY)
     )
 endif()
 
-if (MSVC)
-  FOREACH(flag
-      CMAKE_C_FLAGS_RELEASE CMAKE_C_FLAGS_RELWITHDEBINFO
-      CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_DEBUG_INIT
-      CMAKE_CXX_FLAGS_RELEASE  CMAKE_CXX_FLAGS_RELWITHDEBINFO
-      CMAKE_CXX_FLAGS_DEBUG  CMAKE_CXX_FLAGS_DEBUG_INIT)
-      if (MSVC)
-          STRING(REPLACE "/MD"  "/MT" "${flag}" "${${flag}}")
-          SET("${flag}" "${${flag}}")
-      endif (MSVC)
-  ENDFOREACH()
-endif()
-
 add_subdirectory(Common)
 add_subdirectory(tools/lld)
 
 if (LLVM_INCLUDE_TESTS)
   add_custom_target(LLDUnitTests)
-  llvm_add_unittests(LLD_UNITTESTS_ADDED)
+  set_target_properties(LLDUnitTests PROPERTIES FOLDER "LLD/Tests")
+  if (TARGET llvm_gtest)
+    add_subdirectory(unittests)
+  endif()
   add_subdirectory(test)
 endif()
 

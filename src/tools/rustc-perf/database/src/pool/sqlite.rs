@@ -4,7 +4,7 @@ use crate::{
     CompileBenchmark, Date, Profile,
 };
 use crate::{ArtifactIdNumber, Index, QueuedCommit};
-use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use hashbrown::HashMap;
 use rusqlite::params;
 use rusqlite::OptionalExtension;
@@ -717,6 +717,8 @@ impl Connection for SqliteConnection {
         _profile: Profile,
         _scenario: crate::Scenario,
     ) {
+        #![allow(clippy::diverging_sub_expression)]
+
         // FIXME: this is left for the future, if we ever need to support it. It
         // shouldn't be too hard, but we may also want to just intern the raw
         // self profile files into sqlite database or something like that, not
@@ -952,7 +954,7 @@ impl Connection for SqliteConnection {
                     include: row.get(3).unwrap(),
                     exclude: row.get(4).unwrap(),
                     runs: row.get(5).unwrap(),
-                    commit_date: row.get::<_, Option<i64>>(6).unwrap().map(|timestamp| Date(DateTime::from_utc(NaiveDateTime::from_timestamp_opt(timestamp, 0).unwrap(), Utc)))
+                    commit_date: row.get::<_, Option<i64>>(6).unwrap().map(|timestamp| Date(DateTime::from_timestamp(timestamp, 0).unwrap()))
                 })
             })
             .collect::<Result<Vec<_>, _>>()
@@ -983,7 +985,7 @@ impl Connection for SqliteConnection {
                         include: row.get(3).unwrap(),
                         exclude: row.get(4).unwrap(),
                         runs: row.get(5).unwrap(),
-                        commit_date: row.get::<_, Option<i64>>(6).unwrap().map(|timestamp| Date(DateTime::from_utc(NaiveDateTime::from_timestamp_opt(timestamp, 0).unwrap(), Utc)))
+                        commit_date: row.get::<_, Option<i64>>(6).unwrap().map(|timestamp| Date(DateTime::from_timestamp(timestamp, 0).unwrap()))
                     })
                 },
             )

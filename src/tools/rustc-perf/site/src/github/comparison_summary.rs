@@ -1,10 +1,10 @@
 use crate::comparison::{
     deserves_attention_icount, write_summary_table, ArtifactComparison, ArtifactComparisonSummary,
-    Direction, Metric,
+    Direction,
 };
 use crate::load::SiteCtxt;
 
-use database::{ArtifactId, QueuedCommit};
+use database::{metric::Metric, ArtifactId, QueuedCommit};
 
 use crate::github::{COMMENT_MARK_ROLLUP, COMMENT_MARK_TEMPORARY, RUST_REPO_GITHUB_API_URL};
 use humansize::BINARY;
@@ -176,14 +176,19 @@ async fn summarize_run(
     let inst_comparison =
         calculate_metric_comparison(ctxt, &commit, Metric::InstructionsUser).await?;
 
-    let errors = if !inst_comparison.newly_failed_benchmarks.is_empty() {
+    let has_broken_benchmarks = !inst_comparison.newly_failed_benchmarks.is_empty();
+    let errors = if has_broken_benchmarks {
         let benchmarks = inst_comparison
             .newly_failed_benchmarks
             .keys()
             .map(|benchmark| format!("- {benchmark}"))
             .collect::<Vec<_>>()
             .join("\n");
-        format!("\n**Warning ⚠**: The following benchmark(s) failed to build:\n{benchmarks}\n")
+        let alert_row = ":exclamation: ".repeat(5);
+        // second \n before `alert_row` needed or markdown will render this as appended to last li
+        format!(
+            "\n{alert_row}\n**Warning :warning:**: The following benchmark(s) failed to build:\n{benchmarks}\n\n{alert_row}\n"
+        )
     } else {
         String::new()
     };
@@ -206,7 +211,9 @@ async fn summarize_run(
         &mut message,
         "### Overall result: {}{}\n",
         overall_result,
-        if is_regression {
+        if has_broken_benchmarks {
+            " - BENCHMARK(S) FAILED"
+        } else if is_regression {
             " - ACTION NEEDED"
         } else {
             " - no action needed"

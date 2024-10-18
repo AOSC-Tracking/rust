@@ -6,13 +6,14 @@ use collector::Bound;
 use crate::api::detail_sections::CompilationSections;
 use crate::api::graphs::GraphKind;
 use crate::api::{detail_graphs, detail_sections, graphs, runtime_detail_graphs, ServerResult};
-use crate::db::{self, ArtifactId, Profile, Scenario};
-use crate::interpolate::IsInterpolated;
 use crate::load::SiteCtxt;
-use crate::selector::{
+use crate::self_profile::get_or_download_self_profile;
+
+use database::interpolate::IsInterpolated;
+use database::selector::{
     CompileBenchmarkQuery, CompileTestCase, RuntimeBenchmarkQuery, Selector, SeriesResponse,
 };
-use crate::self_profile::get_or_download_self_profile;
+use database::{self, ArtifactId, Profile, Scenario};
 
 /// Returns data for before/after graphs when comparing a single test result comparison
 /// for a compile-time benchmark.
@@ -235,7 +236,13 @@ async fn create_graphs(
         .collect();
 
     if request.benchmark.is_none() {
-        let summary_benchmark = create_summary(ctxt, &interpolated_responses, request.kind)?;
+        let request_profile = request
+            .profile
+            .as_ref()
+            .map(|p| p.parse::<Profile>())
+            .transpose()?;
+        let summary_benchmark =
+            create_summary(ctxt, &interpolated_responses, request.kind, request_profile)?;
         benchmarks.insert("Summary".to_string(), summary_benchmark);
     }
 
@@ -289,12 +296,16 @@ fn create_summary(
         Vec<((ArtifactId, Option<f64>), IsInterpolated)>,
     >],
     graph_kind: GraphKind,
+    profile: Option<Profile>,
 ) -> ServerResult<HashMap<Profile, HashMap<String, graphs::Series>>> {
     let mut baselines = HashMap::new();
     let mut summary_benchmark = HashMap::new();
     let summary_query_cases = iproduct!(
         ctxt.summary_scenarios(),
-        vec![Profile::Check, Profile::Debug, Profile::Opt, Profile::Doc]
+        profile.map_or_else(
+            || vec![Profile::Check, Profile::Debug, Profile::Opt, Profile::Doc],
+            |p| vec![p]
+        )
     );
     for (scenario, profile) in summary_query_cases {
         let baseline = match baselines.entry((profile, scenario)) {
@@ -310,7 +321,7 @@ fn create_summary(
                     .map(|sr| sr.series.iter().cloned())
                     .collect();
 
-                let value = db::average(baseline_responses)
+                let value = crate::average::average(baseline_responses)
                     .next()
                     .map_or(0.0, |((_c, d), _interpolated)| d.expect("interpolated"));
                 *v.insert(value)
@@ -327,7 +338,7 @@ fn create_summary(
             .map(|sr| sr.series.iter().cloned())
             .collect();
 
-        let avg_vs_baseline = db::average(summary_case_responses)
+        let avg_vs_baseline = crate::average::average(summary_case_responses)
             .map(|((c, d), i)| ((c, Some(d.expect("interpolated") / baseline)), i));
 
         let graph_series = graph_series(avg_vs_baseline, graph_kind);

@@ -1,14 +1,18 @@
 use chrono::offset::TimeZone;
-use chrono::{DateTime, Datelike, Utc};
+use chrono::{DateTime, Utc};
 use hashbrown::HashMap;
 use intern::intern;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::hash;
 use std::ops::{Add, Sub};
+use std::sync::Arc;
 use std::time::Duration;
 
+pub mod interpolate;
+pub mod metric;
 pub mod pool;
+pub mod selector;
 
 pub use pool::{Connection, Pool};
 
@@ -51,32 +55,12 @@ impl std::str::FromStr for Date {
 }
 
 impl Date {
-    pub fn from_format(date: &str, format: &str) -> Result<Date, DateParseError> {
-        match DateTime::parse_from_str(date, format) {
-            Ok(value) => Ok(Date(value.with_timezone(&Utc))),
-            Err(_) => match Utc.datetime_from_str(date, format) {
-                Ok(dt) => Ok(Date(dt)),
-                Err(err) => Err(DateParseError {
-                    input: date.to_string(),
-                    format: format.to_string(),
-                    error: err,
-                }),
-            },
-        }
-    }
-
     pub fn ymd_hms(year: i32, month: u32, day: u32, h: u32, m: u32, s: u32) -> Date {
         Date(Utc.with_ymd_and_hms(year, month, day, h, m, s).unwrap())
     }
 
     pub fn empty() -> Date {
         Date::ymd_hms(2000, 1, 1, 1, 1, 1)
-    }
-
-    pub fn start_of_week(&self) -> Date {
-        let weekday = self.0.weekday();
-        // num_days_from_sunday is 0 for Sunday
-        Date(self.0 - chrono::Duration::days(weekday.num_days_from_sunday() as i64))
     }
 }
 
@@ -265,20 +249,15 @@ impl fmt::Display for Profile {
 ///
 /// These are usually reported to users in a "flipped" way. For example,
 /// `Cache::Empty` means we're doing a "full" build. We present this to users as "full".
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "variant", content = "name")]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Scenario {
     /// Empty cache (i.e., full build)
-    #[serde(rename = "full")]
     Empty,
     /// Empty cache but still incremental (i.e., a full incremental build)
-    #[serde(rename = "incr-full")]
     IncrementalEmpty,
     /// Cache is fully up-to-date (i.e., no code has changed)
-    #[serde(rename = "incr-unchanged")]
     IncrementalFresh,
     /// Cache is mostly up-to-date but some code has been changed
-    #[serde(rename = "incr-patched")]
     IncrementalPatch(PatchName),
 }
 
@@ -450,6 +429,34 @@ intern!(pub struct QueryLabel);
 /// A database row ID for an artifact in the artifact table
 #[derive(Serialize, Deserialize, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct ArtifactIdNumber(pub u32);
+
+#[derive(Debug)]
+pub struct ArtifactIdIter {
+    ids: Arc<Vec<ArtifactId>>,
+    idx: usize,
+}
+
+impl ArtifactIdIter {
+    pub fn new(artifact_ids: Arc<Vec<ArtifactId>>) -> ArtifactIdIter {
+        ArtifactIdIter {
+            ids: artifact_ids,
+            idx: 0,
+        }
+    }
+}
+
+impl Iterator for ArtifactIdIter {
+    type Item = ArtifactId;
+    fn next(&mut self) -> Option<Self::Item> {
+        let r = self.ids.get(self.idx)?;
+        self.idx += 1;
+        Some(r.clone())
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.ids.len(), Some(self.ids.len()))
+    }
+}
 
 /// Cached Id lookups for many database tables.
 ///
