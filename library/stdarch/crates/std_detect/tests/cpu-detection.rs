@@ -122,6 +122,7 @@ fn aarch64_linux() {
     println!("fp8dot2: {}", is_aarch64_feature_detected!("fp8dot2"));
     println!("wfxt: {}", is_aarch64_feature_detected!("wfxt"));
     println!("sme: {}", is_aarch64_feature_detected!("sme"));
+    println!("sme-b16b16: {}", is_aarch64_feature_detected!("sme-b16b16"));
     println!("sme-i16i64: {}", is_aarch64_feature_detected!("sme-i16i64"));
     println!("sme-f64f64: {}", is_aarch64_feature_detected!("sme-f64f64"));
     println!("sme-fa64: {}", is_aarch64_feature_detected!("sme-fa64"));
@@ -188,8 +189,8 @@ fn aarch64_bsd() {
 }
 
 #[test]
-#[cfg(all(target_arch = "aarch64", target_os = "macos"))]
-fn aarch64_macos() {
+#[cfg(all(target_arch = "aarch64", target_vendor = "apple"))]
+fn aarch64_darwin() {
     println!("asimd: {:?}", is_aarch64_feature_detected!("asimd"));
     println!("fp: {:?}", is_aarch64_feature_detected!("fp"));
     println!("fp16: {:?}", is_aarch64_feature_detected!("fp16"));
@@ -228,8 +229,11 @@ fn powerpc_linux() {
 }
 
 #[test]
-#[cfg(all(target_arch = "powerpc64", target_os = "linux"))]
-fn powerpc64_linux() {
+#[cfg(all(
+    target_arch = "powerpc64",
+    any(target_os = "linux", target_os = "freebsd"),
+))]
+fn powerpc64_linux_or_freebsd() {
     println!("altivec: {}", is_powerpc64_feature_detected!("altivec"));
     println!("vsx: {}", is_powerpc64_feature_detected!("vsx"));
     println!("power8: {}", is_powerpc64_feature_detected!("power8"));

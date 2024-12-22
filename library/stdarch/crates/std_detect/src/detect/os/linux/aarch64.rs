@@ -14,10 +14,7 @@ pub(crate) fn detect_features() -> cache::Initializer {
         // https://reviews.llvm.org/D114523
         let mut arch = [0_u8; libc::PROP_VALUE_MAX as usize];
         let len = unsafe {
-            libc::__system_property_get(
-                b"ro.arch\0".as_ptr() as *const libc::c_char,
-                arch.as_mut_ptr() as *mut libc::c_char,
-            )
+            libc::__system_property_get(c"ro.arch".as_ptr(), arch.as_mut_ptr() as *mut libc::c_char)
         };
         // On Exynos, ro.arch is not available on Android 12+, but it is fine
         // because Android 9+ includes the fix.
@@ -472,11 +469,7 @@ impl AtHwcap {
                 self.svesha3 && sve2 && self.sha512 && self.sha3 && self.sha1 && self.sha2,
             );
             enable_feature(Feature::sve2_bitperm, self.svebitperm && self.sve2);
-            // SVE_B16B16 can be implemented either for SVE or SME
-            enable_feature(
-                Feature::sve_b16b16,
-                self.bf16 && (self.sveb16b16 || self.smeb16b16),
-            );
+            enable_feature(Feature::sve_b16b16, self.bf16 && self.sveb16b16);
             enable_feature(Feature::hbc, self.hbc);
             enable_feature(Feature::mops, self.mops);
             enable_feature(Feature::ecv, self.ecv);
@@ -500,6 +493,10 @@ impl AtHwcap {
             let sme2 = self.sme2 && sme;
             enable_feature(Feature::sme2, sme2);
             enable_feature(Feature::sme2p1, self.sme2p1 && sme2);
+            enable_feature(
+                Feature::sme_b16b16,
+                sme2 && self.bf16 && self.sveb16b16 && self.smeb16b16,
+            );
             enable_feature(Feature::sme_f16f16, self.smef16f16 && sme2);
             enable_feature(Feature::sme_lutv2, self.smelutv2);
             let sme_f8f32 = self.smef8f32 && sme2 && fp8;

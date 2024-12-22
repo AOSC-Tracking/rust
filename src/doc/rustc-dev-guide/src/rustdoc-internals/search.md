@@ -26,6 +26,8 @@ For space savings, it's also written without newlines or spaces.
         "q": [[0, "crate_name"]],
         // parent type
         "i": [2, 0],
+        // type dictionary
+        "p": [[1, "i32"], [1, "str"], [5, "Data", 0]],
         // function signature
         "f": "{{gb}{d}}`", // [[3, 1], [2]]
         // impl disambiguator
@@ -34,12 +36,12 @@ For space savings, it's also written without newlines or spaces.
         "c": "OjAAAAAAAAA=", // empty bitmap
         // empty description flag
         "e": "OjAAAAAAAAA=", // empty bitmap
-        // type dictionary
-        "p": [[1, "i32"], [1, "str"], [5, "crate_name::Data"]],
         // aliases
         "a": [["get_name", 0]],
         // description shards
         "D": "g", // 3
+        // inlined re-exports
+        "r": [],
     }]
 ]
 ```
@@ -354,3 +356,171 @@ The unification filter ensures that:
 The bloom filter checks none of these things,
 and, on top of that, can have false positives.
 But it's fast and uses very little memory, so the bloom filter helps.
+
+## Re-exports
+
+[Re-export inlining] allows the same item to be found by multiple names.
+Search supports this by giving the same item multiple entries and tracking a canonical path
+for any items where that differs from the given path.
+
+For example, this sample index has a single struct exported from two paths:
+
+```json
+[
+    [ "crate_name", {
+        "doc": "Documentation",
+        "n": ["Data", "Data"],
+        "t": "FF",
+        "d": ["The data struct", "The data struct"],
+        "q": [[0, "crate_name"], [1, "crate_name::submodule"]],
+        "i": [0, 0],
+        "p": [],
+        "f": "``",
+        "b": [],
+        "c": [],
+        "a": [],
+        "r": [[0, 1]],
+    }]
+]
+```
+
+The important part of this example is the `r` array,
+which indicates that path entry 1 in the `q` array is
+the canonical path for item 0.
+That is, `crate_name::Data` has a canonical path of `crate_name::submodule::Data`.
+
+This might sound like a strange design, since it has the duplicate data.
+It's done that way because inlining can happen across crates,
+which are compiled separately and might not all be present in the docs.
+
+```json
+[
+  [ "crate_name", ... ],
+  [ "crate_name_2", { "q": [[0, "crate_name::submodule"], [5, "core::option"]], ... }]
+]
+```
+
+In the above example, a canonical path actually comes from a dependency,
+and another one comes from an inlined standard library item:
+the canonical path isn't even in the index!
+The canonical path might also be private.
+In either case, it's never shown to the user, and is only used for deduplication.
+
+Associated types, like methods, store them differently.
+These types are connected with an entry in `p` (their "parent")
+and each one has an optional third tuple element:
+
+    "p": [[5, "Data", 0, 1]]
+
+That's:
+
+- 5: It's a struct
+- "Data": Its name
+- 0: Its display path, "crate_name"
+- 1: Its canonical path, "crate_name::submodule"
+
+In both cases, the canonical path might not be public at all,
+or it might be from another crate that isn't in the docs,
+so it's never shown to the user, but is used for deduplication.
+
+[Re-export inlining]: https://doc.rust-lang.org/nightly/rustdoc/write-documentation/re-exports.html
+
+## Testing the search engine
+
+While the generated UI is tested using `rustdoc-gui` tests, the
+primary way the search engine is tested is the `rustdoc-js` and
+`rustdoc-js-std` tests. They run in NodeJS.
+
+A `rustdoc-js` test has a `.rs` and `.js` file, with the same name.
+The `.rs` file specifies the hypothetical library crate to run
+the searches on (make sure you mark anything you need to find as `pub`).
+The `.js` file specifies the actual searches.
+The `rustdoc-js-std` tests are the same, but don't require an `.rs`
+file, since they use the standard library.
+
+The `.js` file is like a module (except the loader takes care of
+`exports` for you). It uses these variables:
+
+|      Name      |              Type              | Description
+| -------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------
+| `FILTER_CRATE` | `string`                       | Only include results from the given crate. In the GUI, this is the "Results in <kbd>crate</kbd>" drop-down menu.
+| `EXPECTED`     | `[ResultsTable]\|ResultsTable` | List of tests to run, specifying what the hypothetical user types into the search box and sees in the tabs
+| `PARSED`       | `[ParsedQuery]\|ParsedQuery`   | List of parser tests to run, without running an actual search
+
+`FILTER_CRATE` can be left out (equivalent to searching "all crates"), but you
+have to specify `EXPECTED` or `PARSED`.
+
+
+
+By default, the test fails if any of the results specified in the test case are
+not found after running the search, or if the results found after running the
+search don't appear in the same order that they do in the test.
+The actual search results may, however, include results that aren't in the test.
+To override this, specify any of the following magic comments.
+Put them on their own line, without indenting.
+
+* `// exact-check`: If search results appear that aren't part of the test case,
+  then fail.
+* `// ignore-order`: Allow search results to appear in any order.
+* `// should-fail`: Used to write negative tests.
+
+Standard library tests usually shouldn't specify `// exact-check`, since we
+want the libs team to be able to add new items without causing unrelated
+tests to fail, but standalone tests will use it more often.
+
+The `ResultsTable` and `ParsedQuery` types are specified in
+[`externs.js`](https://github.com/rust-lang/rust/blob/master/src/librustdoc/html/static/js/externs.js).
+
+For example, imagine we needed to fix a bug where a function named
+`constructor` couldn't be found. To do this, write two files:
+
+```rust
+// tests/rustdoc-js/constructor_search.rs
+// The test case needs to find this result.
+pub fn constructor(_input: &str) -> i32 { 1 }
+```
+
+```js
+// tests/rustdoc-js/constructor_search.js
+// exact-check
+// Since this test runs against its own crate,
+// new items should not appear in the search results.
+const EXPECTED = [
+  // This first test targets name-based search.
+  {
+    query: "constructor",
+    others: [
+      { path: "constructor_search", name: "constructor" },
+    ],
+    in_args: [],
+    returned: [],
+  },
+  // This test targets the second tab.
+  {
+    query: "str",
+    others: [],
+    in_args: [
+      { path: "constructor_search", name: "constructor" },
+    ],
+    returned: [],
+  },
+  // This test targets the third tab.
+  {
+    query: "i32",
+    others: [],
+    in_args: [],
+    returned: [
+      { path: "constructor_search", name: "constructor" },
+    ],
+  },
+  // This test targets advanced type-driven search.
+  {
+    query: "str -> i32",
+    others: [
+      { path: "constructor_search", name: "constructor" },
+    ],
+    in_args: [],
+    returned: [],
+  },
+]
+```

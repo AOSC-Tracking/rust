@@ -709,7 +709,7 @@ Hello world!
         .with_stderr_data(str![[r#"
 [WARNING] `package.edition` is unspecified, defaulting to `2021`
 [UPDATING] `dummy-registry` index
-[LOCKING] 2 packages to latest compatible versions
+[LOCKING] 1 package to latest compatible version
 [DOWNLOADING] crates ...
 [DOWNLOADED] script v1.0.0 (registry `dummy-registry`)
 [COMPILING] script v1.0.0
@@ -747,7 +747,7 @@ Hello world!
 "#]])
         .with_stderr_data(str![[r#"
 [WARNING] `package.edition` is unspecified, defaulting to `2021`
-[LOCKING] 2 packages to latest compatible versions
+[LOCKING] 1 package to latest compatible version
 [COMPILING] bar v0.0.1 ([ROOT]/foo/bar)
 [COMPILING] script v0.0.0 ([ROOT]/foo)
 [FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
@@ -795,6 +795,34 @@ fn main() {
     let p = cargo_test_support::project()
         .file("script.rs", script)
         .file("src/bin/not-script/main.rs", "fn main() {}")
+        .build();
+
+    p.cargo("-Zscript -v script.rs --help")
+        .masquerade_as_nightly_cargo(&["script"])
+        .with_stdout_data(str![[r#"
+Hello world!
+
+"#]])
+        .with_stderr_data(str![[r#"
+[WARNING] `package.edition` is unspecified, defaulting to `2021`
+[COMPILING] script v0.0.0 ([ROOT]/foo)
+[FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
+[RUNNING] `[ROOT]/home/.cargo/target/[HASH]/debug/script[EXE] --help`
+
+"#]])
+        .run();
+}
+
+#[cargo_test]
+fn test_no_autolib() {
+    let script = r#"#!/usr/bin/env cargo
+
+fn main() {
+    println!("Hello world!");
+}"#;
+    let p = cargo_test_support::project()
+        .file("script.rs", script)
+        .file("src/lib.rs", r#"compile_error!{"must not be built"}"#)
         .build();
 
     p.cargo("-Zscript -v script.rs --help")
@@ -1313,6 +1341,36 @@ fn cmd_publish_with_embedded() {
         .with_stderr_data(str![[r#"
 [WARNING] `package.edition` is unspecified, defaulting to `2021`
 [ERROR] [ROOT]/foo/script.rs is unsupported by `cargo publish`
+
+"#]])
+        .run();
+}
+
+#[cargo_test]
+fn manifest_path_env() {
+    let p = cargo_test_support::project()
+        .file(
+            "script.rs",
+            r#"#!/usr/bin/env cargo
+
+fn main() {
+    let path = env!("CARGO_MANIFEST_PATH");
+    println!("CARGO_MANIFEST_PATH: {}", path);
+}
+"#,
+        )
+        .build();
+    p.cargo("-Zscript -v script.rs")
+        .masquerade_as_nightly_cargo(&["script"])
+        .with_stdout_data(str![[r#"
+CARGO_MANIFEST_PATH: [ROOT]/foo/script.rs
+
+"#]])
+        .with_stderr_data(str![[r#"
+[WARNING] `package.edition` is unspecified, defaulting to `2021`
+[COMPILING] script v0.0.0 ([ROOT]/foo)
+[FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
+[RUNNING] `[ROOT]/home/.cargo/target/[HASH]/debug/script[EXE]`
 
 "#]])
         .run();

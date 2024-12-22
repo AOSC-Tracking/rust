@@ -294,6 +294,7 @@ include = [
     "src/lib.rs",
     "build.rs",
 ]
+autolib = false
 autobins = false
 autoexamples = false
 autotests = false
@@ -379,6 +380,7 @@ version = "0.0.1"
 authors = []
 build = false
 include = ["src/lib.rs"]
+autolib = false
 autobins = false
 autoexamples = false
 autotests = false
@@ -467,6 +469,7 @@ include = [
     "src/main.rs",
     "src/lib.rs",
 ]
+autolib = false
 autobins = false
 autoexamples = false
 autotests = false
@@ -556,6 +559,7 @@ version = "0.0.1"
 authors = []
 build = false
 include = ["src/main.rs"]
+autolib = false
 autobins = false
 autoexamples = false
 autotests = false
@@ -650,6 +654,7 @@ include = [
     "tests/test_foo.rs",
     "benches/bench_foo.rs",
 ]
+autolib = false
 autobins = false
 autoexamples = false
 autotests = false
@@ -754,6 +759,7 @@ version = "0.0.1"
 authors = []
 build = false
 include = ["src/lib.rs"]
+autolib = false
 autobins = false
 autoexamples = false
 autotests = false
@@ -1342,7 +1348,7 @@ fn git_duplicate() {
         .with_stderr_data(str![[r#"
 [UPDATING] git repository `[ROOTURL]/a`
 [UPDATING] `dummy-registry` index
-[LOCKING] 4 packages to latest compatible versions
+[LOCKING] 3 packages to latest compatible versions
 [DOWNLOADING] crates ...
 [DOWNLOADED] b v0.5.0 (registry `dummy-registry`)
 [ERROR] failed to sync
@@ -1527,6 +1533,7 @@ name = "git_dep"
 version = "0.0.1"
 authors = []
 build = false
+autolib = false
 autobins = false
 autoexamples = false
 autotests = false
@@ -1542,30 +1549,91 @@ path = "src/lib.rs"
 
 [[example]]
 name = "a"
-path = [..]
+path = "examples/a.rs"
 
 [[example]]
 name = "b"
-path = [..]
+path = "examples/b.rs"
 
 [[example]]
 name = "c"
-path = [..]
+path = "examples/c.rs"
 
 [[example]]
 name = "x"
-path = [..]
+path = "examples/x.rs"
 
 [[example]]
 name = "y"
-path = [..]
+path = "examples/y.rs"
 
 [[example]]
 name = "z"
-path = [..]
+path = "examples/z.rs"
 
 "##]],
     );
+}
+
+#[cargo_test]
+fn git_update_rev() {
+    let (git_project, git_repo) = git::new_repo("git", |p| {
+        p.file("Cargo.toml", &basic_manifest("a", "0.1.0"))
+            .file("src/lib.rs", "")
+    });
+    let url = git_project.url();
+    let ref_1 = "initial";
+    let ref_2 = "update";
+
+    git::tag(&git_repo, ref_1);
+
+    git_project.change_file("src/lib.rs", "pub fn f() {}");
+    git::add(&git_repo);
+    git::commit(&git_repo);
+    git::tag(&git_repo, ref_2);
+
+    let p = project()
+        .file(
+            "Cargo.toml",
+            &format!(
+                r#"
+                    [package]
+                    name = "foo"
+                    version = "0.1.0"
+
+                    [dependencies]
+                    a = {{ git = '{url}', rev = '{ref_1}' }}
+                "#
+            ),
+        )
+        .file("src/lib.rs", "")
+        .build();
+
+    p.cargo("vendor --respect-source-config --versioned-dirs")
+        .run();
+
+    let lib = p.read_file("vendor/a-0.1.0/src/lib.rs");
+    assert_e2e().eq(lib, "");
+
+    p.change_file(
+        "Cargo.toml",
+        &format!(
+            r#"
+                    [package]
+                    name = "foo"
+                    version = "0.1.0"
+
+                    [dependencies]
+                    a = {{ git = '{url}', rev = '{ref_2}' }}
+                "#
+        ),
+    );
+
+    p.cargo("vendor --respect-source-config --versioned-dirs")
+        .run();
+
+    let lib = p.read_file("vendor/a-0.1.0/src/lib.rs");
+    assert_e2e().eq(lib, "pub fn f() {}");
 }
 
 #[cargo_test]
@@ -1805,7 +1873,7 @@ fn no_remote_dependency_no_vendor() {
 
     p.cargo("vendor")
         .with_stderr_data(str![[r#"
-[LOCKING] 2 packages to latest compatible versions
+[LOCKING] 1 package to latest compatible version
 There is no dependency to vendor in this project.
 
 "#]])

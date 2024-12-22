@@ -7,13 +7,9 @@ It provides three kinds of material:
   - Chapters that informally describe the memory model, concurrency model, runtime services, linkage model, and debugging facilities.
   - Appendix chapters providing rationale and references to languages that influenced the design.
 
-<div class="warning">
-
-Warning:
-This book is incomplete. Documenting everything takes a while.
-See the [GitHub issues] for what is not documented in this book.
-
-</div>
+> [!WARNING]
+> This book is incomplete. Documenting everything takes a while.
+> See the [GitHub issues] for what is not documented in this book.
 
 ## Rust releases
 
@@ -92,11 +88,8 @@ These conventions are documented here.
 
 * Warnings that show unsound behavior in the language or possibly confusing interactions of language features are in a special warning box.
 
-  <div class="warning">
-
-  Warning: This is an example warning.
-
-  </div>
+  > [!WARNING]
+  > This is an example warning.
 
 * Code snippets inline in the text are inside `<code>` tags.
 
@@ -119,6 +112,15 @@ These conventions are documented here.
   > &nbsp;&nbsp; | `box` [_Expression_]
 
   See [Notation] for more detail.
+
+* Rule identifiers appear before each language rule enclosed in square brackets. These identifiers provide a way to refer to a specific rule in the language. The rule identifier uses periods to separate sections from most general to most specific ([destructors.scope.nesting.function-body] for example).
+
+  The rule name can be clicked to link to that rule.
+
+r[example.rule.label]
+
+  > [!WARNING]
+  > The organization of the rules is currently in flux. For the time being, these identifier names are not stable between releases, and links to these rules may fail if they are changed. We intend to stabilize these once the organization has settled so that links to the rule names will not break between releases.
 
 ## Contributing
 

@@ -25,10 +25,29 @@ git clone https://github.com/rust-lang/rust.git
 cd rust
 ```
 
+### Partial clone the repository
+
+Due to the size of the repository, cloning on a slower internet connection can take a long time,
+and requires disk space to store the full history of every file and directory.
+Instead, it is possible to tell git to perform a _partial clone_, which will only fully retrieve
+the current file contents, but will automatically retrieve further file contents when you, e.g.,
+jump back in the history.
+All git commands will continue to work as usual, at the price of requiring an internet connection
+to visit not-yet-loaded points in history.
+
+```bash
+git clone --filter='blob:none' https://github.com/rust-lang/rust.git
+cd rust
+```
+
+> **NOTE**: [This link](https://github.blog/open-source/git/get-up-to-speed-with-partial-clone-and-shallow-clone/)
+> describes this type of checkout in more detail, and also compares it to other modes, such as
+> shallow cloning.
+
 ### Shallow clone the repository
 
-Due to the size of the repository, cloning on a slower internet connection can take a long time.
-To sidestep this, you can use the `--depth N` option with the `git clone` command.
+An older alternative to partial clones is to use shallow clone the repository instead.
+To do so, you can use the `--depth N` option with the `git clone` command.
 This instructs `git` to perform a "shallow clone", cloning the repository but truncating it to
 the last `N` commits.
 
@@ -43,8 +62,9 @@ cd rust
 
 > **NOTE**: A shallow clone limits which `git` commands can be run.
 > If you intend to work on and contribute to the compiler, it is
-> generally recommended to fully clone the repository [as shown above](#get-the-source-code).
-> 
+> generally recommended to fully clone the repository [as shown above](#get-the-source-code),
+> or to perform a [partial clone](#shallow-clone-the-repository) instead.
+>
 > For example, `git bisect` and `git blame` require access to the commit history,
 > so they don't work if the repository was cloned with `--depth 1`.
 
@@ -67,8 +87,8 @@ Also, using `x` rather than `x.py` is recommended as:
 
 (You can find the platform related scripts around the `x.py`, like `x.ps1`)
 
-Notice that this is not absolute, for instance, using Nushell in VSCode on Win10,
-typing `x` or `./x` still open the `x.py` in editor rather invoke the program :)
+Notice that this is not absolute. For instance, using Nushell in VSCode on Win10,
+typing `x` or `./x` still opens `x.py` in an editor rather than invoking the program. :)
 
 In the rest of this guide, we use `x` rather than `x.py` directly. The following
 command:
@@ -366,5 +386,19 @@ everything up then you only need to run one command!
 
 `rm -rf build` works too, but then you have to rebuild LLVM, which can take
 a long time even on fast computers.
+
+## Remarks on disk space
+
+Building the compiler (especially if beyond stage 1) can require significant amounts of free disk
+space, possibly around 100GB. This is compounded if you have a separate build directory for
+rust-analyzer (e.g. `build-rust-analyzer`). This is easy to hit with dev-desktops which have a [set
+disk
+quota](https://github.com/rust-lang/simpleinfra/blob/8a59e4faeb75a09b072671c74a7cb70160ebef50/ansible/roles/dev-desktop/defaults/main.yml#L7)
+for each user, but this also applies to local development as well. Occassionally, you may need to:
+
+- Remove `build/` directory.
+- Remove `build-rust-analyzer/` directory (if you have a separate rust-analyzer build directory).
+- Uninstall unnecessary toolchains if you use `cargo-bisect-rustc`. You can check which toolchains
+  are installed with `rustup toolchain list`.
 
 [^1]: issue[#1707](https://github.com/rust-lang/rustc-dev-guide/issues/1707)

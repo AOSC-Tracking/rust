@@ -54,6 +54,7 @@ mod unit;
 pub mod unit_dependencies;
 pub mod unit_graph;
 
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::ffi::{OsStr, OsString};
@@ -63,7 +64,7 @@ use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use anyhow::{bail, Context as _, Error};
+use anyhow::{Context as _, Error};
 use lazycell::LazyCell;
 use tracing::{debug, trace};
 
@@ -409,7 +410,17 @@ fn rustc(
                         )
                     },
                 )
-                .map_err(verbose_if_simple_exit_code)
+                .map_err(|e| {
+                    if output_options.errors_seen == 0 {
+                        // If we didn't expect an error, do not require --verbose to fail.
+                        // This is intended to debug
+                        // https://github.com/rust-lang/crater/issues/733, where we are seeing
+                        // Cargo exit unsuccessfully while seeming to not show any errors.
+                        e
+                    } else {
+                        verbose_if_simple_exit_code(e)
+                    }
+                })
                 .with_context(|| {
                     // adapted from rustc_errors/src/lib.rs
                     let warnings = match output_options.warnings_seen {
@@ -684,9 +695,17 @@ fn prepare_rustc(build_runner: &BuildRunner<'_, '_>, unit: &Unit) -> CargoResult
     base.inherit_jobserver(&build_runner.jobserver);
     build_deps_args(&mut base, build_runner, unit)?;
     add_cap_lints(build_runner.bcx, unit, &mut base);
+    if cargo_rustc_higher_args_precedence(build_runner) {
+        if let Some(args) = build_runner.bcx.extra_args_for(unit) {
+            base.args(args);
+        }
+    }
     base.args(&unit.rustflags);
     if build_runner.bcx.gctx.cli_unstable().binary_dep_depinfo {
         base.arg("-Z").arg("binary-dep-depinfo");
+    }
+    if build_runner.bcx.gctx.cli_unstable().checksum_freshness {
+        base.arg("-Z").arg("checksum-hash-algorithm=blake3");
     }
 
     if is_primary {
@@ -733,7 +752,7 @@ fn prepare_rustdoc(build_runner: &BuildRunner<'_, '_>, unit: &Unit) -> CargoResu
     let doc_dir = build_runner.files().out_dir(unit);
     rustdoc.arg("-o").arg(&doc_dir);
     rustdoc.args(&features_args(unit));
-    rustdoc.args(&check_cfg_args(unit)?);
+    rustdoc.args(&check_cfg_args(unit));
 
     add_error_format_and_color(build_runner, &mut rustdoc);
     add_allow_features(build_runner, &mut rustdoc);
@@ -743,8 +762,11 @@ fn prepare_rustdoc(build_runner: &BuildRunner<'_, '_>, unit: &Unit) -> CargoResu
     }
 
     rustdoc.args(unit.pkg.manifest().lint_rustflags());
-    if let Some(args) = build_runner.bcx.extra_args_for(unit) {
-        rustdoc.args(args);
+
+    if !cargo_rustc_higher_args_precedence(build_runner) {
+        if let Some(args) = build_runner.bcx.extra_args_for(unit) {
+            rustdoc.args(args);
+        }
     }
 
     let metadata = build_runner.metadata_for_doc_units[unit];
@@ -785,6 +807,11 @@ fn prepare_rustdoc(build_runner: &BuildRunner<'_, '_>, unit: &Unit) -> CargoResu
 
     rustdoc::add_output_format(build_runner, unit, &mut rustdoc)?;
 
+    if cargo_rustc_higher_args_precedence(build_runner) {
+        if let Some(args) = build_runner.bcx.extra_args_for(unit) {
+            rustdoc.args(args);
+        }
+    }
     rustdoc.args(&unit.rustdocflags);
 
     if !crate_version_flag_already_present(&rustdoc) {
@@ -1087,8 +1114,10 @@ fn build_base_args(
 
     cmd.args(unit.pkg.manifest().lint_rustflags());
     cmd.args(&profile_rustflags);
-    if let Some(args) = build_runner.bcx.extra_args_for(unit) {
-        cmd.args(args);
+    if !cargo_rustc_higher_args_precedence(build_runner) {
+        if let Some(args) = build_runner.bcx.extra_args_for(unit) {
+            cmd.args(args);
+        }
     }
 
     // `-C overflow-checks` is implied by the setting of `-C debug-assertions`,
@@ -1130,7 +1159,7 @@ fn build_base_args(
     }
 
     cmd.args(&features_args(unit));
-    cmd.args(&check_cfg_args(unit)?);
+    cmd.args(&check_cfg_args(unit));
 
     let meta = build_runner.files().metadata(unit);
     cmd.arg("-C").arg(&format!("metadata={}", meta));
@@ -1344,7 +1373,7 @@ fn package_remap(build_runner: &BuildRunner<'_, '_>, unit: &Unit) -> OsString {
 }
 
 /// Generates the `--check-cfg` arguments for the `unit`.
-fn check_cfg_args(unit: &Unit) -> CargoResult<Vec<OsString>> {
+fn check_cfg_args(unit: &Unit) -> Vec<OsString> {
     // The routine below generates the --check-cfg arguments. Our goals here are to
     // enable the checking of conditionals and pass the list of declared features.
     //
@@ -1381,39 +1410,12 @@ fn check_cfg_args(unit: &Unit) -> CargoResult<Vec<OsString>> {
     // Cargo and docs.rs than rustc and docs.rs. In particular, all users of docs.rs use
     // Cargo, but not all users of rustc (like Rust-for-Linux) use docs.rs.
 
-    let mut args = vec![
+    vec![
         OsString::from("--check-cfg"),
         OsString::from("cfg(docsrs)"),
         OsString::from("--check-cfg"),
         arg_feature,
-    ];
-
-    // Also include the custom arguments specified in `[lints.rust.unexpected_cfgs.check_cfg]`
-    if let Ok(Some(lints)) = unit.pkg.manifest().normalized_toml().normalized_lints() {
-        if let Some(rust_lints) = lints.get("rust") {
-            if let Some(unexpected_cfgs) = rust_lints.get("unexpected_cfgs") {
-                if let Some(config) = unexpected_cfgs.config() {
-                    if let Some(check_cfg) = config.get("check-cfg") {
-                        if let Ok(check_cfgs) =
-                            toml::Value::try_into::<Vec<String>>(check_cfg.clone())
-                        {
-                            for check_cfg in check_cfgs {
-                                args.push(OsString::from("--check-cfg"));
-                                args.push(OsString::from(check_cfg));
-                            }
-                        // error about `check-cfg` not being a list-of-string
-                        } else {
-                            bail!(
-                                "`lints.rust.unexpected_cfgs.check-cfg` must be a list of string"
-                            );
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(args)
+    ]
 }
 
 /// Adds LTO related codegen flags.
@@ -1758,10 +1760,15 @@ fn on_stderr_line_inner(
             ..
         } => {
             #[derive(serde::Deserialize)]
-            struct CompilerMessage {
+            struct CompilerMessage<'a> {
+                // `rendered` contains escape sequences, which can't be
+                // zero-copy deserialized by serde_json.
+                // See https://github.com/serde-rs/json/issues/742
                 rendered: String,
-                message: String,
-                level: String,
+                #[serde(borrow)]
+                message: Cow<'a, str>,
+                #[serde(borrow)]
+                level: Cow<'a, str>,
                 children: Vec<PartialDiagnostic>,
             }
 
@@ -1784,7 +1791,8 @@ fn on_stderr_line_inner(
                 suggestion_applicability: Option<Applicability>,
             }
 
-            if let Ok(mut msg) = serde_json::from_str::<CompilerMessage>(compiler_message.get()) {
+            if let Ok(mut msg) = serde_json::from_str::<CompilerMessage<'_>>(compiler_message.get())
+            {
                 if msg.message.starts_with("aborting due to")
                     || msg.message.ends_with("warning emitted")
                     || msg.message.ends_with("warnings emitted")
@@ -1810,7 +1818,7 @@ fn on_stderr_line_inner(
                         })
                         .any(|b| b);
                     count_diagnostic(&msg.level, options);
-                    state.emit_diag(msg.level, rendered, machine_applicable)?;
+                    state.emit_diag(&msg.level, rendered, machine_applicable)?;
                 }
                 return Ok(true);
             }
@@ -1821,16 +1829,17 @@ fn on_stderr_line_inner(
         // cached replay to enable/disable colors without re-invoking rustc.
         MessageFormat::Json { ansi: false, .. } => {
             #[derive(serde::Deserialize, serde::Serialize)]
-            struct CompilerMessage {
+            struct CompilerMessage<'a> {
                 rendered: String,
-                #[serde(flatten)]
-                other: std::collections::BTreeMap<String, serde_json::Value>,
+                #[serde(flatten, borrow)]
+                other: std::collections::BTreeMap<Cow<'a, str>, serde_json::Value>,
             }
-            if let Ok(mut error) = serde_json::from_str::<CompilerMessage>(compiler_message.get()) {
+            if let Ok(mut error) =
+                serde_json::from_str::<CompilerMessage<'_>>(compiler_message.get())
+            {
                 error.rendered = anstream::adapter::strip_str(&error.rendered).to_string();
                 let new_line = serde_json::to_string(&error)?;
-                let new_msg: Box<serde_json::value::RawValue> = serde_json::from_str(&new_line)?;
-                compiler_message = new_msg;
+                compiler_message = serde_json::value::RawValue::from_string(new_line)?;
             }
         }
 
@@ -1846,11 +1855,12 @@ fn on_stderr_line_inner(
     // Look for a matching directive and inform Cargo internally that a
     // metadata file has been produced.
     #[derive(serde::Deserialize)]
-    struct ArtifactNotification {
-        artifact: String,
+    struct ArtifactNotification<'a> {
+        #[serde(borrow)]
+        artifact: Cow<'a, str>,
     }
 
-    if let Ok(artifact) = serde_json::from_str::<ArtifactNotification>(compiler_message.get()) {
+    if let Ok(artifact) = serde_json::from_str::<ArtifactNotification<'_>>(compiler_message.get()) {
         trace!("found directive from rustc: `{}`", artifact.artifact);
         if artifact.artifact.ends_with(".rmeta") {
             debug!("looks like metadata finished early!");
@@ -1868,11 +1878,22 @@ fn on_stderr_line_inner(
     }
 
     #[derive(serde::Deserialize)]
-    struct CompilerMessage {
-        level: String,
+    struct CompilerMessage<'a> {
+        #[serde(borrow)]
+        message: Cow<'a, str>,
+        #[serde(borrow)]
+        level: Cow<'a, str>,
     }
-    if let Ok(message) = serde_json::from_str::<CompilerMessage>(compiler_message.get()) {
-        count_diagnostic(&message.level, options);
+
+    if let Ok(msg) = serde_json::from_str::<CompilerMessage<'_>>(compiler_message.get()) {
+        if msg.message.starts_with("aborting due to")
+            || msg.message.ends_with("warning emitted")
+            || msg.message.ends_with("warnings emitted")
+        {
+            // Skip this line; we'll print our own summary at the end.
+            return Ok(true);
+        }
+        count_diagnostic(&msg.level, options);
     }
 
     let msg = machine_message::FromCompiler {
@@ -1985,4 +2006,20 @@ fn scrape_output_path(build_runner: &BuildRunner<'_, '_>, unit: &Unit) -> CargoR
     build_runner
         .outputs(unit)
         .map(|outputs| outputs[0].path.clone())
+}
+
+/// Provides a way to change the precedence of `cargo rustc -- <flags>`.
+///
+/// This is intended to be a short-live function.
+///
+/// See <https://github.com/rust-lang/cargo/issues/14346>
+fn cargo_rustc_higher_args_precedence(build_runner: &BuildRunner<'_, '_>) -> bool {
+    build_runner.bcx.gctx.nightly_features_allowed
+        && build_runner
+            .bcx
+            .gctx
+            .get_env("__CARGO_RUSTC_ORIG_ARGS_PRIO")
+            .ok()
+            .as_deref()
+            != Some("1")
 }

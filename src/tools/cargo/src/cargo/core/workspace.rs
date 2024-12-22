@@ -24,9 +24,7 @@ use crate::sources::{PathSource, SourceConfigMap, CRATES_IO_INDEX, CRATES_IO_REG
 use crate::util::edit_distance;
 use crate::util::errors::{CargoResult, ManifestError};
 use crate::util::interning::InternedString;
-use crate::util::lints::{
-    analyze_cargo_lints_table, check_im_a_teapot, check_implicit_features, unused_dependencies,
-};
+use crate::util::lints::{analyze_cargo_lints_table, check_im_a_teapot};
 use crate::util::toml::{read_manifest, InheritableFields};
 use crate::util::{
     context::CargoResolverConfig, context::ConfigRelativePath, context::IncompatibleRustVersions,
@@ -577,7 +575,7 @@ impl<'gctx> Workspace<'gctx> {
     }
 
     /// Returns an iterator over default packages in this workspace
-    pub fn default_members<'a>(&'a self) -> impl Iterator<Item = &Package> {
+    pub fn default_members<'a>(&'a self) -> impl Iterator<Item = &'a Package> {
         let packages = &self.packages;
         self.default_members
             .iter()
@@ -662,9 +660,13 @@ impl<'gctx> Workspace<'gctx> {
         self.requested_lockfile_path = path;
     }
 
+    pub fn requested_lockfile_path(&self) -> Option<&Path> {
+        self.requested_lockfile_path.as_deref()
+    }
+
     /// Get the lowest-common denominator `package.rust-version` within the workspace, if specified
     /// anywhere
-    pub fn rust_version(&self) -> Option<&RustVersion> {
+    pub fn lowest_rust_version(&self) -> Option<&RustVersion> {
         self.members().filter_map(|pkg| pkg.rust_version()).min()
     }
 
@@ -1236,8 +1238,6 @@ impl<'gctx> Workspace<'gctx> {
             self.gctx,
         )?;
         check_im_a_teapot(pkg, &path, &cargo_lints, &mut error_count, self.gctx)?;
-        check_implicit_features(pkg, &path, &cargo_lints, &mut error_count, self.gctx)?;
-        unused_dependencies(pkg, &path, &cargo_lints, &mut error_count, self.gctx)?;
         if error_count > 0 {
             Err(crate::util::errors::AlreadyPrintedError::new(anyhow!(
                 "encountered {error_count} errors(s) while running lints"
@@ -1363,12 +1363,12 @@ impl<'gctx> Workspace<'gctx> {
         }
     }
 
-    fn report_unknown_features_error(
+    fn missing_feature_spelling_suggestions(
         &self,
-        specs: &[PackageIdSpec],
+        selected_members: &[&Package],
         cli_features: &CliFeatures,
         found_features: &BTreeSet<FeatureValue>,
-    ) -> CargoResult<()> {
+    ) -> Vec<String> {
         // Keeps track of which features were contained in summary of `member` to suggest similar features in errors
         let mut summary_features: Vec<InternedString> = Default::default();
 
@@ -1387,10 +1387,7 @@ impl<'gctx> Workspace<'gctx> {
         let mut optional_dependency_names_per_member: BTreeMap<&Package, BTreeSet<InternedString>> =
             Default::default();
 
-        for member in self
-            .members()
-            .filter(|m| specs.iter().any(|spec| spec.matches(m.package_id())))
-        {
+        for &member in selected_members {
             // Only include features this member defines.
             let summary = member.summary();
 
@@ -1428,7 +1425,7 @@ impl<'gctx> Workspace<'gctx> {
             edit_distance(a.as_str(), b.as_str(), 3).is_some()
         };
 
-        let suggestions: Vec<_> = cli_features
+        cli_features
             .features
             .difference(found_features)
             .map(|feature| match feature {
@@ -1522,8 +1519,15 @@ impl<'gctx> Workspace<'gctx> {
             })
             .sorted()
             .take(5)
-            .collect();
+            .collect()
+    }
 
+    fn report_unknown_features_error(
+        &self,
+        specs: &[PackageIdSpec],
+        cli_features: &CliFeatures,
+        found_features: &BTreeSet<FeatureValue>,
+    ) -> CargoResult<()> {
         let unknown: Vec<_> = cli_features
             .features
             .difference(found_features)
@@ -1531,18 +1535,70 @@ impl<'gctx> Workspace<'gctx> {
             .sorted()
             .collect();
 
-        if suggestions.is_empty() {
-            bail!(
-                "none of the selected packages contains these features: {}",
-                unknown.join(", ")
-            );
+        let (selected_members, unselected_members): (Vec<_>, Vec<_>) = self
+            .members()
+            .partition(|member| specs.iter().any(|spec| spec.matches(member.package_id())));
+
+        let missing_packages_with_the_features = unselected_members
+            .into_iter()
+            .filter(|member| {
+                unknown
+                    .iter()
+                    .any(|feature| member.summary().features().contains_key(&**feature))
+            })
+            .map(|m| m.name())
+            .collect_vec();
+
+        let these_features = if unknown.len() == 1 {
+            "this feature"
         } else {
-            bail!(
-                "none of the selected packages contains these features: {}, did you mean: {}?",
-                unknown.join(", "),
-                suggestions.join(", ")
+            "these features"
+        };
+        let mut msg = if let [singular] = &selected_members[..] {
+            format!(
+                "the package '{}' does not contain {these_features}: {}",
+                singular.name(),
+                unknown.join(", ")
+            )
+        } else {
+            let names = selected_members.iter().map(|m| m.name()).join(", ");
+            format!("none of the selected packages contains {these_features}: {}\nselected packages: {names}", unknown.join(", "))
+        };
+
+        use std::fmt::Write;
+        if !missing_packages_with_the_features.is_empty() {
+            write!(
+                &mut msg,
+                "\nhelp: package{} with the missing feature{}: {}",
+                if missing_packages_with_the_features.len() != 1 {
+                    "s"
+                } else {
+                    ""
+                },
+                if unknown.len() != 1 { "s" } else { "" },
+                missing_packages_with_the_features.join(", ")
+            )?;
+        } else {
+            let suggestions = self.missing_feature_spelling_suggestions(
+                &selected_members,
+                cli_features,
+                found_features,
             );
+            if !suggestions.is_empty() {
+                write!(
+                    &mut msg,
+                    "\nhelp: there {}: {}",
+                    if suggestions.len() == 1 {
+                        "is a similarly named feature"
+                    } else {
+                        "are similarly named features"
+                    },
+                    suggestions.join(", ")
+                )?;
+            }
         }
+
+        bail!("{msg}")
     }
 
     /// New command-line feature selection behavior with resolver = "2" or the

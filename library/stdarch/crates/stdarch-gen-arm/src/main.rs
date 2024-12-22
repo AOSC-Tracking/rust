@@ -2392,7 +2392,7 @@ fn gen_arm(
                         consts[0].clone()
                     } else {
                         let const_arm = const_arm.replace("ttn", &type_to_native_type(in_t[1]));
-                        let mut cnt = String::from(in_t[1]);
+                        let mut cnt = String::from(format!("const {{ {}", in_t[1]));
                         cnt.push_str("([");
                         for i in 0..type_len(in_t[1]) {
                             if i != 0 {
@@ -2400,7 +2400,7 @@ fn gen_arm(
                             }
                             cnt.push_str(&const_arm);
                         }
-                        cnt.push_str("])");
+                        cnt.push_str("]) }");
                         cnt
                     };
                     match para_num {
@@ -2475,7 +2475,7 @@ fn gen_arm(
                             cnt.push_str(&const_aarch64);
                         }
                         cnt.push_str("])");
-                        format!("{current_fn}(a, {cnt})")
+                        format!("{current_fn}(a, const {{ {cnt} }})")
                     } else {
                         match para_num {
                             1 => format!("{current_fn}(a, {const_aarch64})"),

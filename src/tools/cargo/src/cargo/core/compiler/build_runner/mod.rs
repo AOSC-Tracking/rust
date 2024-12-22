@@ -16,7 +16,7 @@ use jobserver::Client;
 
 use super::build_plan::BuildPlan;
 use super::custom_build::{self, BuildDeps, BuildScriptOutputs, BuildScripts};
-use super::fingerprint::Fingerprint;
+use super::fingerprint::{Checksum, Fingerprint};
 use super::job_queue::JobQueue;
 use super::layout::Layout;
 use super::lto::Lto;
@@ -50,6 +50,8 @@ pub struct BuildRunner<'a, 'gctx> {
     pub fingerprints: HashMap<Unit, Arc<Fingerprint>>,
     /// Cache of file mtimes to reduce filesystem hits.
     pub mtime_cache: HashMap<PathBuf, FileTime>,
+    /// Cache of file checksums to reduce filesystem reads.
+    pub checksum_cache: HashMap<PathBuf, Checksum>,
     /// A set used to track which units have been compiled.
     /// A unit may appear in the job graph multiple times as a dependency of
     /// multiple packages, but it only needs to run once.
@@ -113,6 +115,7 @@ impl<'a, 'gctx> BuildRunner<'a, 'gctx> {
             build_script_outputs: Arc::new(Mutex::new(BuildScriptOutputs::default())),
             fingerprints: HashMap::new(),
             mtime_cache: HashMap::new(),
+            checksum_cache: HashMap::new(),
             compiled: HashSet::new(),
             build_scripts: HashMap::new(),
             build_explicit_deps: HashMap::new(),
@@ -124,6 +127,27 @@ impl<'a, 'gctx> BuildRunner<'a, 'gctx> {
             metadata_for_doc_units: HashMap::new(),
             failed_scrape_units: Arc::new(Mutex::new(HashSet::new())),
         })
+    }
+
+    /// Dry-run the compilation without actually running it.
+    ///
+    /// This is expected to collect information like the location of output artifacts.
+    /// Please keep in sync with non-compilation part in [`BuildRunner::compile`].
+    pub fn dry_run(mut self) -> CargoResult<Compilation<'gctx>> {
+        let _lock = self
+            .bcx
+            .gctx
+            .acquire_package_cache_lock(CacheLockMode::Shared)?;
+        self.lto = super::lto::generate(self.bcx)?;
+        self.prepare_units()?;
+        self.prepare()?;
+        self.check_collisions()?;
+
+        for unit in &self.bcx.roots {
+            self.collect_tests_and_executables(unit)?;
+        }
+
+        Ok(self.compilation)
     }
 
     /// Starts compilation, waits for it to finish, and returns information
@@ -214,31 +238,7 @@ impl<'a, 'gctx> BuildRunner<'a, 'gctx> {
 
         // Collect the result of the build into `self.compilation`.
         for unit in &self.bcx.roots {
-            // Collect tests and executables.
-            for output in self.outputs(unit)?.iter() {
-                if output.flavor == FileFlavor::DebugInfo || output.flavor == FileFlavor::Auxiliary
-                {
-                    continue;
-                }
-
-                let bindst = output.bin_dst();
-
-                if unit.mode == CompileMode::Test {
-                    self.compilation
-                        .tests
-                        .push(self.unit_output(unit, &output.path));
-                } else if unit.target.is_executable() {
-                    self.compilation
-                        .binaries
-                        .push(self.unit_output(unit, bindst));
-                } else if unit.target.is_cdylib()
-                    && !self.compilation.cdylibs.iter().any(|uo| uo.unit == *unit)
-                {
-                    self.compilation
-                        .cdylibs
-                        .push(self.unit_output(unit, bindst));
-                }
-            }
+            self.collect_tests_and_executables(unit)?;
 
             // Collect information for `rustdoc --test`.
             if unit.mode.is_doc_test() {
@@ -246,7 +246,7 @@ impl<'a, 'gctx> BuildRunner<'a, 'gctx> {
                 let mut args = compiler::extern_args(&self, unit, &mut unstable_opts)?;
                 args.extend(compiler::lto_args(&self, unit));
                 args.extend(compiler::features_args(unit));
-                args.extend(compiler::check_cfg_args(unit)?);
+                args.extend(compiler::check_cfg_args(unit));
 
                 let script_meta = self.find_build_script_metadata(unit);
                 if let Some(meta) = script_meta {
@@ -305,6 +305,33 @@ impl<'a, 'gctx> BuildRunner<'a, 'gctx> {
             }
         }
         Ok(self.compilation)
+    }
+
+    fn collect_tests_and_executables(&mut self, unit: &Unit) -> CargoResult<()> {
+        for output in self.outputs(unit)?.iter() {
+            if output.flavor == FileFlavor::DebugInfo || output.flavor == FileFlavor::Auxiliary {
+                continue;
+            }
+
+            let bindst = output.bin_dst();
+
+            if unit.mode == CompileMode::Test {
+                self.compilation
+                    .tests
+                    .push(self.unit_output(unit, &output.path));
+            } else if unit.target.is_executable() {
+                self.compilation
+                    .binaries
+                    .push(self.unit_output(unit, bindst));
+            } else if unit.target.is_cdylib()
+                && !self.compilation.cdylibs.iter().any(|uo| uo.unit == *unit)
+            {
+                self.compilation
+                    .cdylibs
+                    .push(self.unit_output(unit, bindst));
+            }
+        }
+        Ok(())
     }
 
     /// Returns the executable for the specified unit (if any).
