@@ -32,7 +32,7 @@ compiler doesn’t naively allocate from the buffer.  Instead, we check if that
 type was already constructed. If it was, we just get the same pointer we had
 before, otherwise we make a fresh pointer. With this schema if we want to know
 if two types are the same, all we need to do is compare the pointers which is
-efficient. [`TyKind`] should never be constructed on the stack, and it would be unusable
+efficient. [`ty::TyKind`] should never be constructed on the stack, and it would be unusable
 if done so.
 You always allocate them from this arena and you always intern them so they are
 unique.
@@ -65,7 +65,6 @@ represented as a slice `&'tcx [tcx.types.i32, tcx.types.u32]`).
 [`Predicate`]: https://doc.rust-lang.org/nightly/nightly-rustc/rustc_middle/ty/struct.Predicate.html
 [`TraitRef`]: https://doc.rust-lang.org/nightly/nightly-rustc/rustc_middle/ty/struct.TraitRef.html
 [`ty::TyKind`]: https://doc.rust-lang.org/nightly/nightly-rustc/rustc_middle/ty/sty/type.TyKind.html
-[`TyKind`]: https://doc.rust-lang.org/nightly/nightly-rustc/rustc_middle/ty/ty_kind/enum.TyKind.html
 [traits]: ./traits/resolution.md
 
 ## The `tcx` and how it uses lifetimes
@@ -94,7 +93,7 @@ structures (e.g. the [Abstract Syntax Tree (AST)][ast], [High-Level Intermediate
 Representation (`HIR`)][hir], and the type system) and as such, arenas and
 references are heavily relied upon to minimize unnecessary memory use. This
 manifests itself in the way people can plug into the compiler (i.e. the
-[driver](./rustc-driver.md)), preferring a "push"-style API (callbacks) instead
+[driver](./rustc-driver/intro.md)), preferring a "push"-style API (callbacks) instead
 of the more Rust-ic "pull" style (think the `Iterator` trait).
 
 Thread-local storage and interning are used a lot through the compiler to reduce

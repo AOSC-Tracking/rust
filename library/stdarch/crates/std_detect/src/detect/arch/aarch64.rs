@@ -51,6 +51,7 @@ features! {
     /// * `"mte"` - FEAT_MTE & FEAT_MTE2
     /// * `"paca"` - FEAT_PAuth (address authentication)
     /// * `"pacg"` - FEAT_Pauth (generic authentication)
+    /// * `"pauth-lr"` - FEAT_PAuth_LR
     /// * `"pmull"` - FEAT_PMULL
     /// * `"rand"` - FEAT_RNG
     /// * `"rcpc"` - FEAT_LRCPC
@@ -159,6 +160,7 @@ features! {
     @FEATURE: #[unstable(feature = "stdarch_aarch64_feature_detection", issue = "127764")] fp8fma: "fp8fma";
     /// FEAT_FP8FMA (F8FMA Instructions)
     @FEATURE: #[unstable(feature = "stdarch_aarch64_feature_detection", issue = "127764")] fpmr: "fpmr";
+    without cfg check: true;
     /// FEAT_FPMR (Special-purpose AArch64-FPMR register)
     @FEATURE: #[stable(feature = "simd_aarch64", since = "1.60.0")] frintts: "frintts";
     /// FEAT_FRINTTS (float to integer rounding instructions)
@@ -184,6 +186,8 @@ features! {
     /// FEAT_PAuth (address authentication)
     @FEATURE: #[stable(feature = "simd_aarch64", since = "1.60.0")] pacg: "pacg";
     /// FEAT_PAuth (generic authentication)
+    @FEATURE: #[unstable(feature = "stdarch_aarch64_feature_detection", issue = "127764")] pauth_lr: "pauth-lr";
+    /// FEAT_PAuth_LR
     @FEATURE: #[stable(feature = "simd_aarch64", since = "1.60.0")] rand: "rand";
     /// FEAT_RNG (Random Number Generator)
     @FEATURE: #[stable(feature = "simd_aarch64", since = "1.60.0")] rcpc: "rcpc";

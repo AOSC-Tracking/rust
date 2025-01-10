@@ -687,7 +687,6 @@ fn build_script_with_bin_artifact_and_lib_false() {
         )
         .build();
 
-    #[expect(deprecated)]
     p.cargo("build -Z bindeps")
         .masquerade_as_nightly_cargo(&["bindeps"])
         .with_status(101)
@@ -731,7 +730,6 @@ fn lib_with_bin_artifact_and_lib_false() {
         )
         .build();
 
-    #[expect(deprecated)]
     p.cargo("build -Z bindeps")
         .masquerade_as_nightly_cargo(&["bindeps"])
         .with_status(101)
@@ -1117,26 +1115,21 @@ fn build_script_deps_adopt_specified_target_unconditionally() {
         .file("bar/src/lib.rs", "pub fn doit() {}")
         .build();
 
-    #[expect(deprecated)]
     p.cargo("check -v -Z bindeps")
         .masquerade_as_nightly_cargo(&["bindeps"])
-        .with_stderr_does_not_contain(format!(
-            "[RUNNING] `rustc --crate-name build_script_build --edition=2015 build.rs [..]--target {} [..]",
-            target
-        ))
+        .with_stderr_does_not_contain(
+            "[RUNNING] `rustc --crate-name build_script_build --edition=2015 build.rs [..]--target [ALT_TARGET] [..]",
+        )
         .with_stderr_contains("[RUNNING] `rustc --crate-name build_script_build --edition=2015 build.rs [..]")
-        .with_stderr_contains(format!(
-            "[RUNNING] `rustc --crate-name bar --edition=2015 bar/src/lib.rs [..]--target {} [..]",
-            target
-        ))
-        .with_stderr_contains(format!(
-            "[RUNNING] `rustc --crate-name bar --edition=2015 bar/src/main.rs [..]--target {} [..]",
-            target
-        ))
-        .with_stderr_does_not_contain(format!(
-            "[RUNNING] `rustc --crate-name foo [..]--target {} [..]",
-            target
-        ))
+        .with_stderr_contains(
+            "[RUNNING] `rustc --crate-name bar --edition=2015 bar/src/lib.rs [..]--target [ALT_TARGET] [..]",
+        )
+        .with_stderr_contains(
+            "[RUNNING] `rustc --crate-name bar --edition=2015 bar/src/main.rs [..]--target [ALT_TARGET] [..]",
+        )
+        .with_stderr_does_not_contain(
+            "[RUNNING] `rustc --crate-name foo [..]--target [ALT_TARGET] [..]",
+        )
         .with_stderr_contains("[RUNNING] `rustc --crate-name foo [..]")
         .run();
 }
@@ -1237,21 +1230,17 @@ fn non_build_script_deps_adopt_specified_target_unconditionally() {
         .file("bar/src/lib.rs", "pub fn doit() {}")
         .build();
 
-    #[expect(deprecated)]
     p.cargo("check -v -Z bindeps")
         .masquerade_as_nightly_cargo(&["bindeps"])
-        .with_stderr_contains(format!(
-            "[RUNNING] `rustc --crate-name bar --edition=2015 bar/src/lib.rs [..]--target {} [..]",
-            target
-        ))
-        .with_stderr_contains(format!(
-            "[RUNNING] `rustc --crate-name bar --edition=2015 bar/src/main.rs [..]--target {} [..]",
-            target
-        ))
-        .with_stderr_does_not_contain(format!(
-            "[RUNNING] `rustc --crate-name foo [..]--target {} [..]",
-            target
-        ))
+        .with_stderr_contains(
+            "[RUNNING] `rustc --crate-name bar --edition=2015 bar/src/lib.rs [..]--target [ALT_TARGET] [..]",
+        )
+        .with_stderr_contains(
+            "[RUNNING] `rustc --crate-name bar --edition=2015 bar/src/main.rs [..]--target [ALT_TARGET] [..]",
+        )
+        .with_stderr_does_not_contain(
+            "[RUNNING] `rustc --crate-name foo [..]--target [ALT_TARGET] [..]",
+        )
         .with_stderr_contains("[RUNNING] `rustc --crate-name foo [..]")
         .run();
 }
@@ -1385,27 +1374,22 @@ fn build_script_deps_adopts_target_platform_if_target_equals_target() {
         .build();
 
     let alternate_target = cross_compile::alternate();
-    #[expect(deprecated)]
     p.cargo("check -v -Z bindeps --target")
         .arg(alternate_target)
         .masquerade_as_nightly_cargo(&["bindeps"])
-        .with_stderr_does_not_contain(format!(
-            "[RUNNING] `rustc --crate-name build_script_build --edition=2015 build.rs [..]--target {} [..]",
-            alternate_target
-        ))
+        .with_stderr_does_not_contain(
+            "[RUNNING] `rustc --crate-name build_script_build --edition=2015 build.rs [..]--target [ALT_TARGET] [..]",
+        )
         .with_stderr_contains("[RUNNING] `rustc --crate-name build_script_build --edition=2015 build.rs [..]")
-        .with_stderr_contains(format!(
-            "[RUNNING] `rustc --crate-name bar --edition=2015 bar/src/lib.rs [..]--target {} [..]",
-            alternate_target
-        ))
-        .with_stderr_contains(format!(
-            "[RUNNING] `rustc --crate-name bar --edition=2015 bar/src/main.rs [..]--target {} [..]",
-            alternate_target
-        ))
-        .with_stderr_contains(format!(
-            "[RUNNING] `rustc --crate-name foo [..]--target {} [..]",
-            alternate_target
-        ))
+        .with_stderr_contains(
+            "[RUNNING] `rustc --crate-name bar --edition=2015 bar/src/lib.rs [..]--target [ALT_TARGET] [..]",
+        )
+        .with_stderr_contains(
+            "[RUNNING] `rustc --crate-name bar --edition=2015 bar/src/main.rs [..]--target [ALT_TARGET] [..]",
+        )
+        .with_stderr_contains(
+            "[RUNNING] `rustc --crate-name foo [..]--target [ALT_TARGET] [..]",
+        )
         .run();
 }
 
@@ -1568,15 +1552,94 @@ fn artifact_dep_target_specified() {
         .with_status(0)
         .run();
 
-    // TODO: This command currently fails due to a bug in cargo but it should be fixed so that it succeeds in the future.
     p.cargo("tree -Z bindeps")
         .masquerade_as_nightly_cargo(&["bindeps"])
-        .with_stdout_data("")
-        .with_stderr_data(r#"...
-[..]did not find features for (PackageId { name: "bindep", version: "0.0.0", source: "[..]" }, NormalOrDev) within activated_features:[..]
-...
-"#)
-        .with_status(101)
+        .with_stdout_data(str![[r#"
+foo v0.0.0 ([ROOT]/foo)
+└── bindep v0.0.0 ([ROOT]/foo/bindep)
+
+"#]])
+        .with_status(0)
+        .run();
+}
+
+/// From issue #10593
+/// The case where:
+/// *   artifact dep is { target = <specified> }
+/// *   dependency of that artifact dependency specifies the same target
+/// *   the target is not activated.
+#[cargo_test]
+fn dep_of_artifact_dep_same_target_specified() {
+    if cross_compile::disabled() {
+        return;
+    }
+    let target = cross_compile::alternate();
+    let p = project()
+        .file(
+            "Cargo.toml",
+            &format!(
+                r#"
+                    [package]
+                    name = "foo"
+                    version = "0.1.0"
+                    edition = "2015"
+                    resolver = "2"
+
+                    [dependencies]
+                    bar = {{ path = "bar", artifact = "bin", target = "{target}" }}
+                "#,
+            ),
+        )
+        .file("src/lib.rs", "")
+        .file(
+            "bar/Cargo.toml",
+            &format!(
+                r#"
+                    [package]
+                    name = "bar"
+                    version = "0.1.0"
+
+                    [target.{target}.dependencies]
+                    baz = {{ path = "../baz" }}
+                "#,
+            ),
+        )
+        .file("bar/src/main.rs", "fn main() {}")
+        .file(
+            "baz/Cargo.toml",
+            r#"
+                [package]
+                name = "baz"
+                version = "0.1.0"
+
+            "#,
+        )
+        .file("baz/src/lib.rs", "")
+        .build();
+
+    p.cargo("check -Z bindeps")
+        .masquerade_as_nightly_cargo(&["bindeps"])
+        .with_stderr_data(str![[r#"
+[LOCKING] 2 packages to latest compatible versions
+[COMPILING] baz v0.1.0 ([ROOT]/foo/baz)
+[COMPILING] bar v0.1.0 ([ROOT]/foo/bar)
+[CHECKING] foo v0.1.0 ([ROOT]/foo)
+[FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
+
+"#]])
+        .with_status(0)
+        .run();
+
+    p.cargo("tree -Z bindeps")
+        .masquerade_as_nightly_cargo(&["bindeps"])
+        .with_stdout_data(
+            r#"...
+foo v0.1.0 ([ROOT]/foo)
+└── bar v0.1.0 ([ROOT]/foo/bar)
+    └── baz v0.1.0 ([ROOT]/foo/baz)
+"#,
+        )
+        .with_status(0)
         .run();
 }
 
@@ -1698,9 +1761,7 @@ perhaps a crate was updated and forgotten to be re-vendored?
         .run();
 }
 
-// FIXME: `download_accessible` should work properly for artifact dependencies
 #[cargo_test]
-#[ignore = "broken, needs download_accessible fix"]
 fn proc_macro_in_artifact_dep() {
     // Forcing FeatureResolver to check a proc-macro for a dependency behind a
     // target dependency.
@@ -1750,7 +1811,18 @@ fn proc_macro_in_artifact_dep() {
 
     p.cargo("check -Z bindeps")
         .masquerade_as_nightly_cargo(&["bindeps"])
-        .with_stderr_data(str![[r#""#]])
+        .with_stderr_data(
+            r#"...
+[UPDATING] `dummy-registry` index
+[LOCKING] 2 packages to latest compatible versions
+[DOWNLOADING] crates ...
+[ERROR] failed to download from `[ROOTURL]/dl/pm/1.0.0/download`
+
+Caused by:
+  [37] Could[..]t read a file:// file (Couldn't open file [ROOT]/dl/pm/1.0.0/download)
+"#,
+        )
+        .with_status(101)
         .run();
 }
 
@@ -2199,7 +2271,8 @@ fn publish_artifact_dep() {
         .with_stderr_data(str![[r#"
 [UPDATING] crates.io index
 [PACKAGING] foo v0.1.0 ([ROOT]/foo)
-[PACKAGED] 3 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
+[UPDATING] crates.io index
+[PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
 [UPLOADING] foo v0.1.0 ([ROOT]/foo)
 [UPLOADED] foo v0.1.0 to registry `crates-io`
 [NOTE] waiting for `foo v0.1.0` to be available at registry `crates-io`.
@@ -2259,11 +2332,21 @@ You may press ctrl-c to skip waiting; the crate should be available shortly.
         }
         "#,
         "foo-0.1.0.crate",
-        &["Cargo.toml", "Cargo.toml.orig", "src/lib.rs"],
-        &[(
+        &["Cargo.toml", "Cargo.toml.orig", "src/lib.rs", "Cargo.lock"],
+        [(
             "Cargo.toml",
-            &format!(
-                r#"{}
+            str![[r##"
+# THIS FILE IS AUTOMATICALLY GENERATED BY CARGO
+#
+# When uploading crates to the registry Cargo will automatically
+# "normalize" Cargo.toml files for maximal compatibility
+# with all versions of Cargo and also rewrite `path` dependencies
+# to registry (e.g., crates.io) dependencies.
+#
+# If you are reading this file be aware that the original Cargo.toml
+# will likely look very different (and much more reasonable).
+# See Cargo.toml.orig for the original contents.
+
 [package]
 edition = "2015"
 name = "foo"
@@ -2299,9 +2382,9 @@ artifact = [
     "cdylib",
     "staticlib",
 ]
-target = "target""#,
-                cargo::core::manifest::MANIFEST_PREAMBLE
-            ),
+target = "target"
+
+"##]],
         )],
     );
 }

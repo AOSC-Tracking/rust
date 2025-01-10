@@ -51,7 +51,6 @@ macro_rules! conversions {
         $(
             impl $ty {
                 #[inline(always)]
-                #[rustc_const_stable(feature = "wasm_simd_const", since = "1.56.0")]
                 pub(crate) const fn v128(self) -> v128 {
                     unsafe { mem::transmute(self) }
                 }

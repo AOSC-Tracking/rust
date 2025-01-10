@@ -6,6 +6,7 @@ use std::sync::Mutex;
 
 use anyhow::Context as _;
 use cargo_util::{paths, ProcessBuilder, ProcessError};
+use filetime::FileTime;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
@@ -25,9 +26,9 @@ pub struct Rustc {
     pub workspace_wrapper: Option<PathBuf>,
     /// Verbose version information (the output of `rustc -vV`)
     pub verbose_version: String,
-    /// The rustc version (`1.23.4-beta.2`), this comes from verbose_version.
+    /// The rustc version (`1.23.4-beta.2`), this comes from `verbose_version`.
     pub version: semver::Version,
-    /// The host triple (arch-platform-OS), this comes from verbose_version.
+    /// The host triple (arch-platform-OS), this comes from `verbose_version`.
     pub host: InternedString,
     /// The rustc full commit hash, this comes from `verbose_version`.
     pub commit_hash: Option<String>,
@@ -329,7 +330,13 @@ fn rustc_fingerprint(
         let path = paths::resolve_executable(path)?;
         path.hash(hasher);
 
-        paths::mtime(&path)?.hash(hasher);
+        let meta = paths::metadata(&path)?;
+        meta.len().hash(hasher);
+
+        // Often created and modified are the same, but not all filesystems support the former,
+        // and distro reproducible builds may clamp the latter, so we try to use both.
+        FileTime::from_creation_time(&meta).hash(hasher);
+        FileTime::from_last_modification_time(&meta).hash(hasher);
         Ok(())
     };
 

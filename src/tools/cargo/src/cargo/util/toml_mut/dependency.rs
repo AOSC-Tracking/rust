@@ -14,7 +14,6 @@ use crate::core::SourceId;
 use crate::core::Summary;
 use crate::core::{Features, GitReference};
 use crate::util::toml::lookup_path_base;
-use crate::util::toml_mut::is_sorted;
 use crate::CargoResult;
 use crate::GlobalContext;
 
@@ -177,7 +176,7 @@ impl Dependency {
         self.public
     }
 
-    /// Get the SourceID for this dependency.
+    /// Get the `SourceID` for this dependency.
     pub fn source_id(&self, gctx: &GlobalContext) -> CargoResult<MaybeWorkspace<SourceId>> {
         match &self.source.as_ref() {
             Some(Source::Registry(_)) | None => {
@@ -639,7 +638,7 @@ impl Dependency {
                             .collect::<Option<IndexSet<_>>>()
                     })
                     .unwrap_or_default();
-                let is_already_sorted = is_sorted(features.iter());
+                let is_already_sorted = features.iter().is_sorted();
                 features.extend(new_features.iter().map(|s| s.as_str()));
                 let features = if is_already_sorted {
                     features.into_iter().sorted().collect::<toml_edit::Value>()
@@ -904,7 +903,7 @@ impl PathSource {
         self
     }
 
-    /// Get the SourceID for this dependency.
+    /// Get the `SourceID` for this dependency.
     pub fn source_id(&self) -> CargoResult<SourceId> {
         SourceId::for_path(&self.path)
     }
@@ -968,7 +967,7 @@ impl GitSource {
         self
     }
 
-    /// Get the SourceID for this dependency.
+    /// Get the `SourceID` for this dependency.
     pub fn source_id(&self) -> CargoResult<SourceId> {
         let git_url = self.git.parse::<url::Url>()?;
         let git_ref = self.git_ref();

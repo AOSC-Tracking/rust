@@ -211,9 +211,9 @@ fn publish_with_replacement() {
 [WARNING] manifest has no documentation, homepage or repository.
 See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
 [PACKAGING] foo v0.0.1 ([ROOT]/foo)
-[PACKAGED] 3 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-[VERIFYING] foo v0.0.1 ([ROOT]/foo)
 [UPDATING] `alternative` index
+[PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
+[VERIFYING] foo v0.0.1 ([ROOT]/foo)
 [DOWNLOADING] crates ...
 [DOWNLOADED] bar v1.0.0 (registry `alternative`)
 [COMPILING] bar v1.0.0
@@ -290,6 +290,49 @@ fn source_replacement_with_registry_url() {
 [CHECKING] bar v0.0.1
 [CHECKING] foo v0.0.1 ([ROOT]/foo)
 [FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
+
+"#]])
+        .run();
+}
+
+#[cargo_test]
+fn source_replacement_with_no_package_in_directoy() {
+    let p = project()
+        .file(
+            "Cargo.toml",
+            r#"
+                [package]
+                name = "foo"
+                version = "0.1.0"
+                edition = "2021"
+
+                [dependencies]
+                bar = { version = "^0.8.9" }
+            "#,
+        )
+        .file("src/lib.rs", "")
+        .build();
+
+    let root = paths::root();
+    t!(fs::create_dir(&root.join("vendor")));
+
+    let crates_io = setup_replacement(&format!(
+        r#"
+            [source.crates-io]
+            replace-with = "vendored-sources"
+
+            [source.vendored-sources]
+            directory = "vendor"
+        "#
+    ));
+
+    p.cargo("build")
+        .replace_crates_io(crates_io.index_url())
+        .with_status(101)
+        .with_stderr_data(str![[r#"
+[ERROR] no matching package named `bar` found
+location searched: directory source `[ROOT]/vendor` (which is replacing registry `crates-io`)
+required by package `foo v0.1.0 ([ROOT]/foo)`
 
 "#]])
         .run();

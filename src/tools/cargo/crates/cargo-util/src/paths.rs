@@ -94,11 +94,18 @@ pub fn normalize_path(path: &Path) -> PathBuf {
         match component {
             Component::Prefix(..) => unreachable!(),
             Component::RootDir => {
-                ret.push(component.as_os_str());
+                ret.push(Component::RootDir);
             }
             Component::CurDir => {}
             Component::ParentDir => {
-                ret.pop();
+                if ret.ends_with(Component::ParentDir) {
+                    ret.push(Component::ParentDir);
+                } else {
+                    let popped = ret.pop();
+                    if !popped && !ret.has_root() {
+                        ret.push(Component::ParentDir);
+                    }
+                }
             }
             Component::Normal(c) => {
                 ret.push(c);
@@ -182,7 +189,7 @@ pub fn write<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> Result<()>
 
 /// Writes a file to disk atomically.
 ///
-/// write_atomic uses tempfile::persist to accomplish atomic writes.
+/// This uses `tempfile::persist` to accomplish atomic writes.
 pub fn write_atomic<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> Result<()> {
     let path = path.as_ref();
 
@@ -856,8 +863,42 @@ fn exclude_from_time_machine(path: &Path) {
 #[cfg(test)]
 mod tests {
     use super::join_paths;
+    use super::normalize_path;
     use super::write;
     use super::write_atomic;
+
+    #[test]
+    fn test_normalize_path() {
+        let cases = &[
+            ("", ""),
+            (".", ""),
+            (".////./.", ""),
+            ("/", "/"),
+            ("/..", "/"),
+            ("/foo/bar", "/foo/bar"),
+            ("/foo/bar/", "/foo/bar"),
+            ("/foo/bar/./././///", "/foo/bar"),
+            ("/foo/bar/..", "/foo"),
+            ("/foo/bar/../..", "/"),
+            ("/foo/bar/../../..", "/"),
+            ("foo/bar", "foo/bar"),
+            ("foo/bar/", "foo/bar"),
+            ("foo/bar/./././///", "foo/bar"),
+            ("foo/bar/..", "foo"),
+            ("foo/bar/../..", ""),
+            ("foo/bar/../../..", ".."),
+            ("../../foo/bar", "../../foo/bar"),
+            ("../../foo/bar/", "../../foo/bar"),
+            ("../../foo/bar/./././///", "../../foo/bar"),
+            ("../../foo/bar/..", "../../foo"),
+            ("../../foo/bar/../..", "../.."),
+            ("../../foo/bar/../../..", "../../.."),
+        ];
+        for (input, expected) in cases {
+            let actual = normalize_path(std::path::Path::new(input));
+            assert_eq!(actual, std::path::Path::new(expected), "input: {input}");
+        }
+    }
 
     #[test]
     fn write_works() {

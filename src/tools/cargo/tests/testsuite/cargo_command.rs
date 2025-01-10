@@ -36,7 +36,7 @@ fn list_commands_with_descriptions() {
 ...
     r                    alias: run
 ...
-    read-manifest        Print a JSON representation of a Cargo.toml manifest.
+    read-manifest        DEPRECATED: Print a JSON representation of a Cargo.toml manifest.
 ...
     t                    alias: test
 ...
@@ -137,7 +137,6 @@ fn list_command_looks_at_path_case_mismatch() {
     );
 }
 
-#[expect(deprecated)]
 #[cargo_test]
 fn list_command_handles_known_external_commands() {
     let p = project()

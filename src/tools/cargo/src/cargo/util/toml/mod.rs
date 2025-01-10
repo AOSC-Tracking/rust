@@ -9,7 +9,7 @@ use crate::core::summary::MissingDependencyError;
 use crate::AlreadyPrintedError;
 use anyhow::{anyhow, bail, Context as _};
 use cargo_platform::Platform;
-use cargo_util::paths::{self, normalize_path};
+use cargo_util::paths;
 use cargo_util_schemas::manifest::{
     self, PackageName, PathBaseName, TomlDependency, TomlDetailedDependency, TomlManifest,
 };
@@ -273,12 +273,6 @@ fn normalize_toml(
     warnings: &mut Vec<String>,
     errors: &mut Vec<String>,
 ) -> CargoResult<manifest::TomlManifest> {
-    if let Some(workspace) = &original_toml.workspace {
-        if workspace.resolver.as_deref() == Some("3") {
-            features.require(Feature::edition2024())?;
-        }
-    }
-
     let mut normalized_toml = manifest::TomlManifest {
         cargo_features: original_toml.cargo_features.clone(),
         package: None,
@@ -316,8 +310,7 @@ fn normalize_toml(
     if let Some(original_package) = original_toml.package() {
         let package_name = &original_package.name;
 
-        let normalized_package =
-            normalize_package_toml(original_package, features, package_root, &inherit)?;
+        let normalized_package = normalize_package_toml(original_package, package_root, &inherit)?;
         let edition = normalized_package
             .normalized_edition()
             .expect("previously normalized")
@@ -507,7 +500,7 @@ fn normalize_toml(
 
         normalized_toml.badges = original_toml.badges.clone();
     } else {
-        for field in original_toml.requires_package() {
+        if let Some(field) = original_toml.requires_package().next() {
             bail!("this virtual manifest specifies a `{field}` section, which is not allowed");
         }
     }
@@ -549,7 +542,6 @@ fn normalize_patch<'a>(
 #[tracing::instrument(skip_all)]
 fn normalize_package_toml<'a>(
     original_package: &manifest::TomlPackage,
-    features: &Features,
     package_root: &Path,
     inherit: &dyn Fn() -> CargoResult<&'a InheritableFields>,
 ) -> CargoResult<Box<manifest::TomlPackage>> {
@@ -681,10 +673,6 @@ fn normalize_package_toml<'a>(
         metadata: original_package.metadata.clone(),
         _invalid_cargo_features: Default::default(),
     };
-
-    if normalized_package.resolver.as_deref() == Some("3") {
-        features.require(Feature::edition2024())?;
-    }
 
     Ok(Box::new(normalized_package))
 }
@@ -1892,8 +1880,13 @@ fn patch(
                 .or_else(|_| toml_url.into_url())
                 .with_context(|| {
                     format!(
-                        "[patch] entry `{}` should be a URL or registry name",
-                        toml_url
+                        "[patch] entry `{}` should be a URL or registry name{}",
+                        toml_url,
+                        if toml_url == "crates" {
+                            "\nFor crates.io, use [patch.crates-io] (with a dash)"
+                        } else {
+                            ""
+                        }
                     )
                 })?,
         };
@@ -2707,7 +2700,7 @@ fn prepare_toml_for_publish(
     let mut package = me.package().unwrap().clone();
     package.workspace = None;
     if let Some(StringOrBool::String(path)) = &package.build {
-        let path = paths::normalize_path(Path::new(path));
+        let path = Path::new(path).to_path_buf();
         let included = packaged_files.map(|i| i.contains(&path)).unwrap_or(true);
         let build = if included {
             let path = path
@@ -3012,7 +3005,7 @@ pub fn prepare_target_for_publish(
     gctx: &GlobalContext,
 ) -> CargoResult<Option<manifest::TomlTarget>> {
     let path = target.path.as_ref().expect("previously normalized");
-    let path = normalize_path(&path.0);
+    let path = &path.0;
     if let Some(packaged_files) = packaged_files {
         if !packaged_files.contains(&path) {
             let name = target.name.as_ref().expect("previously normalized");
@@ -3025,7 +3018,7 @@ pub fn prepare_target_for_publish(
     }
 
     let mut target = target.clone();
-    let path = normalize_path_sep(path, context)?;
+    let path = normalize_path_sep(path.to_path_buf(), context)?;
     target.path = Some(manifest::PathValue(path.into()));
 
     Ok(Some(target))

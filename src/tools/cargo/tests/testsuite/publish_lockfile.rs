@@ -108,7 +108,7 @@ src/main.rs
         f,
         "foo-0.0.1.crate",
         &["Cargo.toml", "Cargo.toml.orig", "Cargo.lock", "src/main.rs"],
-        &[],
+        (),
     );
 }
 
@@ -150,7 +150,7 @@ src/main.rs
 }
 
 #[cargo_test]
-fn no_lock_file_with_library() {
+fn lock_file_with_library() {
     let p = project()
         .file("Cargo.toml", &pl_manifest("foo", "0.0.1", ""))
         .file("src/lib.rs", "")
@@ -162,8 +162,8 @@ fn no_lock_file_with_library() {
     validate_crate_contents(
         f,
         "foo-0.0.1.crate",
-        &["Cargo.toml", "Cargo.toml.orig", "src/lib.rs"],
-        &[],
+        &["Cargo.toml", "Cargo.toml.orig", "src/lib.rs", "Cargo.lock"],
+        (),
     );
 }
 
@@ -188,7 +188,7 @@ fn lock_file_and_workspace() {
         f,
         "foo-0.0.1.crate",
         &["Cargo.toml", "Cargo.toml.orig", "src/main.rs", "Cargo.lock"],
-        &[],
+        (),
     );
 }
 
@@ -576,7 +576,7 @@ See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for
         f,
         "foo-0.0.1.crate",
         &["Cargo.lock", "Cargo.toml", "Cargo.toml.orig", "src/main.rs"],
-        &[],
+        (),
     );
 
     let package_path = p.root().join("target/package/bar-0.0.1.crate");
@@ -586,6 +586,6 @@ See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for
         f,
         "bar-0.0.1.crate",
         &["Cargo.lock", "Cargo.toml", "Cargo.toml.orig", "src/main.rs"],
-        &[],
+        (),
     );
 }

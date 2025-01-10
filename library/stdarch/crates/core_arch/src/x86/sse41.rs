@@ -242,14 +242,14 @@ pub unsafe fn _mm_extract_epi32<const IMM8: i32>(a: __m128i) -> i32 {
 ///     - `11`: Selects bits `[127:96]` from operand `b`.
 ///
 /// * Bits `[5:4]` specify the bits in the result to which the selected bits
-/// from operand `b` are copied:
+///   from operand `b` are copied:
 ///     - `00`: Copies the selected bits from `b` to result bits `[31:0]`.
 ///     - `01`: Copies the selected bits from `b` to result bits `[63:32]`.
 ///     - `10`: Copies the selected bits from `b` to result bits `[95:64]`.
 ///     - `11`: Copies the selected bits from `b` to result bits `[127:96]`.
 ///
 /// * Bits `[3:0]`: If any of these bits are set, the corresponding result
-/// element is cleared.
+///   element is cleared.
 ///
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_insert_ps)
 #[inline]
@@ -740,30 +740,11 @@ pub unsafe fn _mm_ceil_ss(a: __m128, b: __m128) -> __m128 {
 /// double-precision floating-point elements.
 /// Rounding is done according to the rounding parameter, which can be one of:
 ///
-/// ```
-/// #[cfg(target_arch = "x86")]
-/// use std::arch::x86::*;
-/// #[cfg(target_arch = "x86_64")]
-/// use std::arch::x86_64::*;
-///
-/// # fn main() {
-/// // round to nearest, and suppress exceptions:
-/// # let _x =
-/// _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC;
-/// // round down, and suppress exceptions:
-/// # let _x =
-/// _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC;
-/// // round up, and suppress exceptions:
-/// # let _x =
-/// _MM_FROUND_TO_POS_INF | _MM_FROUND_NO_EXC;
-/// // truncate, and suppress exceptions:
-/// # let _x =
-/// _MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC;
-/// // use MXCSR.RC; see `_MM_SET_ROUNDING_MODE`:
-/// # let _x =
-/// _MM_FROUND_CUR_DIRECTION;
-/// # }
-/// ```
+/// * [`_MM_FROUND_TO_NEAREST_INT`] | [`_MM_FROUND_NO_EXC`] : round to nearest and suppress exceptions
+/// * [`_MM_FROUND_TO_NEG_INF`] | [`_MM_FROUND_NO_EXC`] : round down and suppress exceptions
+/// * [`_MM_FROUND_TO_POS_INF`] | [`_MM_FROUND_NO_EXC`] : round up and suppress exceptions
+/// * [`_MM_FROUND_TO_ZERO`] | [`_MM_FROUND_NO_EXC`] : truncate and suppress exceptions
+/// * [`_MM_FROUND_CUR_DIRECTION`] : use `MXCSR.RC` - see [`_MM_SET_ROUNDING_MODE`]
 ///
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_round_pd)
 #[inline]
@@ -781,30 +762,11 @@ pub unsafe fn _mm_round_pd<const ROUNDING: i32>(a: __m128d) -> __m128d {
 /// single-precision floating-point elements.
 /// Rounding is done according to the rounding parameter, which can be one of:
 ///
-/// ```
-/// #[cfg(target_arch = "x86")]
-/// use std::arch::x86::*;
-/// #[cfg(target_arch = "x86_64")]
-/// use std::arch::x86_64::*;
-///
-/// # fn main() {
-/// // round to nearest, and suppress exceptions:
-/// # let _x =
-/// _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC;
-/// // round down, and suppress exceptions:
-/// # let _x =
-/// _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC;
-/// // round up, and suppress exceptions:
-/// # let _x =
-/// _MM_FROUND_TO_POS_INF | _MM_FROUND_NO_EXC;
-/// // truncate, and suppress exceptions:
-/// # let _x =
-/// _MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC;
-/// // use MXCSR.RC; see `_MM_SET_ROUNDING_MODE`:
-/// # let _x =
-/// _MM_FROUND_CUR_DIRECTION;
-/// # }
-/// ```
+/// * [`_MM_FROUND_TO_NEAREST_INT`] | [`_MM_FROUND_NO_EXC`] : round to nearest and suppress exceptions
+/// * [`_MM_FROUND_TO_NEG_INF`] | [`_MM_FROUND_NO_EXC`] : round down and suppress exceptions
+/// * [`_MM_FROUND_TO_POS_INF`] | [`_MM_FROUND_NO_EXC`] : round up and suppress exceptions
+/// * [`_MM_FROUND_TO_ZERO`] | [`_MM_FROUND_NO_EXC`] : truncate and suppress exceptions
+/// * [`_MM_FROUND_CUR_DIRECTION`] : use `MXCSR.RC` - see [`_MM_SET_ROUNDING_MODE`]
 ///
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_round_ps)
 #[inline]
@@ -824,30 +786,11 @@ pub unsafe fn _mm_round_ps<const ROUNDING: i32>(a: __m128) -> __m128 {
 /// result.
 /// Rounding is done according to the rounding parameter, which can be one of:
 ///
-/// ```
-/// #[cfg(target_arch = "x86")]
-/// use std::arch::x86::*;
-/// #[cfg(target_arch = "x86_64")]
-/// use std::arch::x86_64::*;
-///
-/// # fn main() {
-/// // round to nearest, and suppress exceptions:
-/// # let _x =
-/// _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC;
-/// // round down, and suppress exceptions:
-/// # let _x =
-/// _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC;
-/// // round up, and suppress exceptions:
-/// # let _x =
-/// _MM_FROUND_TO_POS_INF | _MM_FROUND_NO_EXC;
-/// // truncate, and suppress exceptions:
-/// # let _x =
-/// _MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC;
-/// // use MXCSR.RC; see `_MM_SET_ROUNDING_MODE`:
-/// # let _x =
-/// _MM_FROUND_CUR_DIRECTION;
-/// # }
-/// ```
+/// * [`_MM_FROUND_TO_NEAREST_INT`] | [`_MM_FROUND_NO_EXC`] : round to nearest and suppress exceptions
+/// * [`_MM_FROUND_TO_NEG_INF`] | [`_MM_FROUND_NO_EXC`] : round down and suppress exceptions
+/// * [`_MM_FROUND_TO_POS_INF`] | [`_MM_FROUND_NO_EXC`] : round up and suppress exceptions
+/// * [`_MM_FROUND_TO_ZERO`] | [`_MM_FROUND_NO_EXC`] : truncate and suppress exceptions
+/// * [`_MM_FROUND_CUR_DIRECTION`] : use `MXCSR.RC` - see [`_MM_SET_ROUNDING_MODE`]
 ///
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_round_sd)
 #[inline]
@@ -867,30 +810,11 @@ pub unsafe fn _mm_round_sd<const ROUNDING: i32>(a: __m128d, b: __m128d) -> __m12
 /// of the intrinsic result.
 /// Rounding is done according to the rounding parameter, which can be one of:
 ///
-/// ```
-/// #[cfg(target_arch = "x86")]
-/// use std::arch::x86::*;
-/// #[cfg(target_arch = "x86_64")]
-/// use std::arch::x86_64::*;
-///
-/// # fn main() {
-/// // round to nearest, and suppress exceptions:
-/// # let _x =
-/// _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC;
-/// // round down, and suppress exceptions:
-/// # let _x =
-/// _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC;
-/// // round up, and suppress exceptions:
-/// # let _x =
-/// _MM_FROUND_TO_POS_INF | _MM_FROUND_NO_EXC;
-/// // truncate, and suppress exceptions:
-/// # let _x =
-/// _MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC;
-/// // use MXCSR.RC; see `_MM_SET_ROUNDING_MODE`:
-/// # let _x =
-/// _MM_FROUND_CUR_DIRECTION;
-/// # }
-/// ```
+/// * [`_MM_FROUND_TO_NEAREST_INT`] | [`_MM_FROUND_NO_EXC`] : round to nearest and suppress exceptions
+/// * [`_MM_FROUND_TO_NEG_INF`] | [`_MM_FROUND_NO_EXC`] : round down and suppress exceptions
+/// * [`_MM_FROUND_TO_POS_INF`] | [`_MM_FROUND_NO_EXC`] : round up and suppress exceptions
+/// * [`_MM_FROUND_TO_ZERO`] | [`_MM_FROUND_NO_EXC`] : truncate and suppress exceptions
+/// * [`_MM_FROUND_CUR_DIRECTION`] : use `MXCSR.RC` - see [`_MM_SET_ROUNDING_MODE`]
 ///
 /// [Intel's documentation](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_round_ss)
 #[inline]

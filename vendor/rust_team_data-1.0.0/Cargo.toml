@@ -15,6 +15,7 @@ name = "rust_team_data"
 version = "1.0.0"
 authors = ["Pietro Albini <pietro@pietroalbini.org>"]
 build = false
+autolib = false
 autobins = false
 autoexamples = false
 autotests = false

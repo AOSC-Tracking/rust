@@ -2,6 +2,7 @@ use std::collections::hash_map::Entry;
 use std::marker::PhantomData;
 use std::ops::Range;
 
+use rustc_abi::{BackendRepr, FieldIdx, FieldsShape, Size, VariantIdx};
 use rustc_data_structures::fx::FxHashMap;
 use rustc_index::IndexVec;
 use rustc_middle::middle::codegen_fn_attrs::CodegenFnAttrFlags;
@@ -11,7 +12,6 @@ use rustc_middle::{bug, mir, ty};
 use rustc_session::config::DebugInfo;
 use rustc_span::symbol::{Symbol, kw};
 use rustc_span::{BytePos, Span, hygiene};
-use rustc_target::abi::{Abi, FieldIdx, FieldsShape, Size, VariantIdx};
 
 use super::operand::{OperandRef, OperandValue};
 use super::place::{PlaceRef, PlaceValue};
@@ -20,7 +20,9 @@ use crate::traits::*;
 
 pub struct FunctionDebugContext<'tcx, S, L> {
     /// Maps from source code to the corresponding debug info scope.
-    pub scopes: IndexVec<mir::SourceScope, DebugScope<S, L>>,
+    /// May be None if the backend is not capable of representing the scope for
+    /// some reason.
+    pub scopes: IndexVec<mir::SourceScope, Option<DebugScope<S, L>>>,
 
     /// Maps from an inlined function to its debug info declaration.
     pub inlined_function_scopes: FxHashMap<Instance<'tcx>, S>,
@@ -231,7 +233,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         &self,
         source_info: mir::SourceInfo,
     ) -> Option<(Bx::DIScope, Option<Bx::DILocation>, Span)> {
-        let scope = &self.debug_context.as_ref()?.scopes[source_info.scope];
+        let scope = &self.debug_context.as_ref()?.scopes[source_info.scope]?;
         let span = hygiene::walk_chain_collapsed(source_info.span, self.mir.span);
         Some((scope.adjust_dbg_scope_for_span(self.cx, span), scope.inlined_at, span))
     }
@@ -510,7 +512,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                         // be marked as a `LocalVariable` for MSVC debuggers to visualize
                         // their data correctly. (See #81894 & #88625)
                         let var_ty_layout = self.cx.layout_of(var_ty);
-                        if let Abi::ScalarPair(_, _) = var_ty_layout.abi {
+                        if let BackendRepr::ScalarPair(_, _) = var_ty_layout.backend_repr {
                             VariableKind::LocalVariable
                         } else {
                             VariableKind::ArgumentVariable(arg_index)

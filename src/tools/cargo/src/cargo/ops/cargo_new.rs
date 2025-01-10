@@ -1,7 +1,6 @@
 use crate::core::{Edition, Shell, Workspace};
 use crate::util::errors::CargoResult;
 use crate::util::important_paths::find_root_manifest_for_wd;
-use crate::util::toml_mut::is_sorted;
 use crate::util::{existing_vcs_repo, FossilRepo, GitRepo, HgRepo, PijulRepo};
 use crate::util::{restricted_names, GlobalContext};
 use anyhow::{anyhow, Context as _};
@@ -573,7 +572,7 @@ pub fn init(opts: &NewOptions, gctx: &GlobalContext) -> CargoResult<NewProjectKi
     Ok(kind)
 }
 
-/// IgnoreList
+/// `IgnoreList`
 struct IgnoreList {
     /// git like formatted entries
     ignore: Vec<String>,
@@ -614,7 +613,7 @@ impl IgnoreList {
         ignore_items.join("\n") + "\n"
     }
 
-    /// format_existing is used to format the IgnoreList when the ignore file
+    /// `format_existing` is used to format the `IgnoreList` when the ignore file
     /// already exists. It reads the contents of the given `BufRead` and
     /// checks if the contents of the ignore list are already existing in the
     /// file.
@@ -995,7 +994,7 @@ fn update_manifest_with_new_member(
             }
         }
 
-        let was_sorted = is_sorted(members.iter().map(Value::as_str));
+        let was_sorted = members.iter().map(Value::as_str).is_sorted();
         members.push(display_path);
         if was_sorted {
             members.sort_by(|lhs, rhs| lhs.as_str().cmp(&rhs.as_str()));

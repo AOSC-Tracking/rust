@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 
-use cargo_test_support::git::cargo_uses_gitoxide;
+use cargo_test_support::git::{add_submodule, cargo_uses_gitoxide};
 use cargo_test_support::paths;
 use cargo_test_support::prelude::IntoData;
 use cargo_test_support::prelude::*;
@@ -2737,6 +2737,7 @@ fn include_overrides_gitignore() {
     p.cargo("package --list --allow-dirty")
         .with_stdout_data(str![[r#"
 .cargo_vcs_info.json
+Cargo.lock
 Cargo.toml
 Cargo.toml.orig
 ignored.txt
@@ -2954,7 +2955,7 @@ fn use_the_cli() {
 
     let stderr = str![[r#"
 [UPDATING] git repository `[ROOTURL]/dep1`
-[RUNNING] `git fetch --verbose --force --update-head-ok [..][ROOTURL]/dep1[..] [..]+HEAD:refs/remotes/origin/HEAD[..]`
+[RUNNING] `git fetch --no-tags --verbose --force --update-head-ok [..][ROOTURL]/dep1[..] [..]+HEAD:refs/remotes/origin/HEAD[..]`
 From [ROOTURL]/dep1
  * [new ref] [..] -> origin/HEAD[..]
 [LOCKING] 1 package to latest compatible version
@@ -3847,11 +3848,20 @@ fn corrupted_checkout_with_cli() {
 }
 
 fn _corrupted_checkout(with_cli: bool) {
-    let git_project = git::new("dep1", |project| {
+    let (git_project, repository) = git::new_repo("dep1", |project| {
         project
             .file("Cargo.toml", &basic_manifest("dep1", "0.5.0"))
             .file("src/lib.rs", "")
     });
+
+    let project2 = git::new("dep2", |project| {
+        project.no_manifest().file("README.md", "")
+    });
+    let url = project2.root().to_url().to_string();
+    add_submodule(&repository, &url, Path::new("dep2"));
+    git::commit(&repository);
+    drop(repository);
+
     let p = project()
         .file(
             "Cargo.toml",
@@ -3873,17 +3883,21 @@ fn _corrupted_checkout(with_cli: bool) {
 
     p.cargo("fetch").run();
 
-    let mut paths = t!(glob::glob(
+    let mut dep1_co_paths = t!(glob::glob(
         paths::home()
             .join(".cargo/git/checkouts/dep1-*/*")
             .to_str()
             .unwrap()
     ));
-    let path = paths.next().unwrap().unwrap();
-    let ok = path.join(".cargo-ok");
+    let dep1_co_path = dep1_co_paths.next().unwrap().unwrap();
+    let dep1_ok = dep1_co_path.join(".cargo-ok");
+    let dep1_manifest = dep1_co_path.join("Cargo.toml");
+    let dep2_readme = dep1_co_path.join("dep2/README.md");
 
     // Deleting this file simulates an interrupted checkout.
-    t!(fs::remove_file(&ok));
+    t!(fs::remove_file(&dep1_ok));
+    t!(fs::remove_file(&dep1_manifest));
+    t!(fs::remove_file(&dep2_readme));
 
     // This should refresh the checkout.
     let mut e = p.cargo("fetch");
@@ -3891,7 +3905,9 @@ fn _corrupted_checkout(with_cli: bool) {
         e.env("CARGO_NET_GIT_FETCH_WITH_CLI", "true");
     }
     e.run();
-    assert!(ok.exists());
+    assert!(dep1_ok.exists());
+    assert!(dep1_manifest.exists());
+    assert!(dep2_readme.exists());
 }
 
 #[cargo_test]
@@ -4033,6 +4049,7 @@ fn git_worktree_with_original_repo_renamed() {
         .cwd(&new)
         .with_stdout_data(str![[r#"
 .cargo_vcs_info.json
+Cargo.lock
 Cargo.toml
 Cargo.toml.orig
 README.md
@@ -4048,6 +4065,90 @@ src/lib.rs
 [CHECKING] foo v0.5.0 ([ROOT]/foo2)
 [FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
 
+"#]])
+        .run();
+}
+
+#[cargo_test(public_network_test, requires_git)]
+fn github_fastpath_error_message() {
+    let p = project()
+        .file(
+            "Cargo.toml",
+            r#"
+                [package]
+                name = "foo"
+                version = "0.1.0"
+                edition = "2015"
+
+                [dependencies]
+                bitflags = { git = "https://github.com/rust-lang/bitflags.git", rev="11111b376b93484341c68fbca3ca110ae5cd2790" }
+            "#,
+        )
+        .file("src/lib.rs", "")
+        .build();
+    p.cargo("fetch")
+        .env("CARGO_NET_GIT_FETCH_WITH_CLI", "true")
+        .with_status(101)
+        .with_stderr_data(str![[r#"
+[UPDATING] git repository `https://github.com/rust-lang/bitflags.git`
+fatal: remote [ERROR] upload-pack: not our ref 11111b376b93484341c68fbca3ca110ae5cd2790
+[ERROR] failed to get `bitflags` as a dependency of package `foo v0.1.0 ([ROOT]/foo)`
+
+Caused by:
+  failed to load source for dependency `bitflags`
+
+Caused by:
+  Unable to update https://github.com/rust-lang/bitflags.git?rev=11111b376b93484341c68fbca3ca110ae5cd2790
+
+Caused by:
+  failed to clone into: [ROOT]/home/.cargo/git/db/bitflags-[HASH]
+
+Caused by:
+  revision 11111b376b93484341c68fbca3ca110ae5cd2790 not found
+
+Caused by:
+  process didn't exit successfully: `git fetch --no-tags --force --update-head-ok [..]
+
+"#]])
+        .run();
+}
+
+#[cargo_test(public_network_test)]
+fn git_fetch_libgit2_error_message() {
+    let p = project()
+        .file(
+            "Cargo.toml",
+            r#"
+                [package]
+                name = "foo"
+                version = "0.1.0"
+                edition = "2015"
+
+                [dependencies]
+                bitflags = { git = "https://github.com/rust-lang/bitflags.git", rev="11111b376b93484341c68fbca3ca110ae5cd2790" }
+            "#,
+        )
+        .file("src/lib.rs", "")
+        .build();
+    p.cargo("fetch")
+        .with_status(101)
+        .with_stderr_data(str![[r#"
+[UPDATING] git repository `https://github.com/rust-lang/bitflags.git`
+...
+[ERROR] failed to get `bitflags` as a dependency of package `foo v0.1.0 ([ROOT]/foo)`
+
+Caused by:
+  failed to load source for dependency `bitflags`
+
+Caused by:
+  Unable to update https://github.com/rust-lang/bitflags.git?rev=11111b376b93484341c68fbca3ca110ae5cd2790
+
+Caused by:
+  failed to clone into: [ROOT]/home/.cargo/git/db/bitflags-[HASH]
+
+Caused by:
+  revision 11111b376b93484341c68fbca3ca110ae5cd2790 not found
+...
 "#]])
         .run();
 }
@@ -4101,6 +4202,7 @@ fn git_worktree_with_bare_original_repo() {
         .cwd(wt.path())
         .with_stdout_data(str![[r#"
 .cargo_vcs_info.json
+Cargo.lock
 Cargo.toml
 Cargo.toml.orig
 README.md

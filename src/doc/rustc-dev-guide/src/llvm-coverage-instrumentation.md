@@ -157,7 +157,7 @@ The `InstrumentCoverage` MIR pass is documented in
 [mir-passes]: mir/passes.md
 [mir-instrument-coverage]: https://github.com/rust-lang/rust/tree/master/compiler/rustc_mir_transform/src/coverage
 [`FunctionCoverageInfo`]: https://doc.rust-lang.org/nightly/nightly-rustc/rustc_middle/mir/coverage/struct.FunctionCoverageInfo.html
-[code-region]: https://doc.rust-lang.org/nightly/nightly-rustc/rustc_middle/mir/coverage/struct.CodeRegion.html
+[code-region]: https://doc.rust-lang.org/nightly/nightly-rustc/rustc_codegen_llvm/coverageinfo/ffi/struct.CodeRegion.html
 [`CoverageKind::CounterIncrement`]: https://doc.rust-lang.org/nightly/nightly-rustc/rustc_middle/mir/coverage/enum.CoverageKind.html#variant.CounterIncrement
 [coverage-statement]: https://doc.rust-lang.org/nightly/nightly-rustc/rustc_middle/mir/enum.StatementKind.html#variant.Coverage
 [instrument-coverage-pass-details]: #implementation-details-of-the-instrumentcoverage-mir-pass
@@ -247,7 +247,7 @@ properly-configured variables in LLVM IR, according to very specific
 details of the [_LLVM Coverage Mapping Format_][coverage-mapping-format]
 (Version 6).[^llvm-and-covmap-versions]
 
-[^llvm-and-covmap-versions]: The Rust compiler (as of <!-- date-check: --> Jul 2023) supports _LLVM Coverage Mapping Format_ 6.
+[^llvm-and-covmap-versions]: The Rust compiler (as of <!-- date-check: --> Nov 2024) supports _LLVM Coverage Mapping Format_ 6.
     The Rust compiler will automatically use the most up-to-date coverage mapping format
     version that is compatible with the compiler's built-in version of LLVM.
 
@@ -317,7 +317,7 @@ These tests compile and run a test program with coverage
 instrumentation, then use LLVM tools to convert the coverage data into a
 human-readable coverage report.
 
-> Tests in `coverage-run` mode have an implicit `// needs-profiler-support`
+> Tests in `coverage-run` mode have an implicit `//@ needs-profiler-runtime`
 > directive, so they will be skipped if the profiler runtime has not been
 > [enabled in `config.toml`](#recommended-configtoml-settings).
 

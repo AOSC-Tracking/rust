@@ -78,6 +78,7 @@ Each new feature described below should explain how to use it.
 * Output behavior
     * [artifact-dir](#artifact-dir) --- Adds a directory where artifacts are copied to.
     * [Different binary name](#different-binary-name) --- Assign a name to the built binary that is separate from the crate name.
+    * [root-dir](#root-dir) --- Controls the root directory relative to which paths are printed
 * Compile behavior
     * [mtime-on-use](#mtime-on-use) --- Updates the last-modified timestamp on every dependency every time it is used, to provide a mechanism to delete unused artifacts.
     * [doctest-xcompile](#doctest-xcompile) --- Supports running doctests with the `--target` flag.
@@ -119,6 +120,7 @@ Each new feature described below should explain how to use it.
     * [lockfile-path](#lockfile-path) --- Allows to specify a path to lockfile other than the default path `<workspace_root>/Cargo.lock`.
     * [package-workspace](#package-workspace) --- Allows for packaging and publishing multiple crates in a workspace.
     * [native-completions](#native-completions) --- Move cargo shell completions to native completions.
+    * [warnings](#warnings) --- controls warning behavior; options for allowing or denying warnings.
 
 ## allow-features
 
@@ -236,6 +238,13 @@ This can also be specified in `.cargo/config.toml` files.
 artifact-dir = "out"
 ```
 
+## root-dir
+* Original Issue: [#9887](https://github.com/rust-lang/cargo/issues/9887)
+* Tracking Issue: None (not currently slated for stabilization)
+
+The `-Zroot-dir` flag sets the root directory relative to which paths are printed.
+This affects both diagnostics and paths emitted by the `file!()` macro.
+
 ## doctest-xcompile
 * Tracking Issue: [#7040](https://github.com/rust-lang/cargo/issues/7040)
 * Tracking Rustc Issue: [#64245](https://github.com/rust-lang/rust/issues/64245)
@@ -351,31 +360,7 @@ This was stabilized in 1.79 in [#13608](https://github.com/rust-lang/cargo/pull/
 
 ### MSRV-aware resolver
 
-`-Zmsrv-policy` allows access to an MSRV-aware resolver which can be enabled with:
-- `resolver.incompatible-rust-versions` config field
-- `workspace.resolver = "3"` / `package.resolver = "3"`
-- `package.edition = "2024"` (only in workspace root)
-
-The resolver will prefer dependencies with a `package.rust-version` that is the same or older than your project's MSRV.
-As the resolver is unable to determine which workspace members will eventually
-depend on a package when it is being selected, we prioritize versions based on
-how many workspace member MSRVs they are compatible with.
-If there is no MSRV set then your toolchain version will be used, allowing it to pick up the toolchain version from pinned in rustup (e.g. `rust-toolchain.toml`).
-
-#### `resolver.incompatible-rust-versions`
-* Type: string
-* Default: `"allow"`
-* Environment: `CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS`
-
-When resolving a version for a dependency, select how versions with incompatible `package.rust-version`s are treated.
-Values include:
-- `allow`: treat `rust-version`-incompatible versions like any other version
-- `fallback`: only consider `rust-version`-incompatible versions if no other version matched
-
-Can be overridden with
-- `--ignore-rust-version` CLI option
-- Setting the dependency's version requirement higher than any version with a compatible `rust-version`
-- Specifying the version to `cargo update` with `--precise`
+This was stabilized in 1.83 in [#14639](https://github.com/rust-lang/cargo/pull/14639).
 
 ### Convert `incompatible_toolchain` error into a lint
 
@@ -459,10 +444,6 @@ component:
 $ rustup component add rust-src --toolchain nightly
 ```
 
-It is also required today that the `-Z build-std` flag is combined with the
-`--target` flag. Note that you're not forced to do a cross compilation, you're
-just forced to pass `--target` in one form or another.
-
 Usage looks like:
 
 ```console
@@ -496,7 +477,6 @@ The value here is a comma-separated list of standard library crates to build.
 As a summary, a list of requirements today to use `-Z build-std` are:
 
 * You must install libstd's source code through `rustup component add rust-src`
-* You must pass `--target`
 * You must use both a nightly Cargo and a nightly rustc
 * The `-Z build-std` flag must be passed to all `cargo` invocations.
 
@@ -1766,6 +1746,27 @@ When in doubt, you can discuss this in [#14520](https://github.com/rust-lang/car
 - powershell:
   Add `CARGO_COMPLETE=powershell cargo +nightly | Invoke-Expression` to `$PROFILE`.
 
+## warnings
+
+* Original Issue: [#8424](https://github.com/rust-lang/cargo/issues/8424)
+* Tracking Issue: [#14802](https://github.com/rust-lang/cargo/issues/14802)
+
+The `-Z warnings` feature enables the `build.warnings` configuration option to control how
+Cargo handles warnings. If the `-Z warnings` unstable flag is not enabled, then
+the `build.warnings` config will be ignored.
+
+This setting currently only applies to rustc warnings. It may apply to additional warnings (such as Cargo lints or Cargo warnings)
+in the future.
+
+### `build.warnings`
+* Type: string
+* Default: `warn`
+* Environment: `CARGO_BUILD_WARNINGS`
+
+Controls how Cargo handles warnings. Allowed values are:
+* `warn`: warnings are emitted as warnings (default).
+* `allow`: warnings are hidden.
+* `deny`: if warnings are emitted, an error will be raised at the end of the operation and the process will exit with a failure exit code. 
 # Stabilized and removed features
 
 ## Compile progress

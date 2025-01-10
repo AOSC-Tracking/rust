@@ -77,7 +77,6 @@ fn all_target_project() -> Project {
         .build()
 }
 
-#[expect(deprecated)]
 #[cargo_test]
 fn profile_selection_build() {
     let p = all_target_project();
@@ -158,7 +157,6 @@ fn profile_selection_build_release() {
         .run();
 }
 
-#[expect(deprecated)]
 #[cargo_test]
 fn profile_selection_build_all_targets() {
     let p = all_target_project();
@@ -717,7 +715,7 @@ fn profile_selection_doc() {
 [COMPILING] bar v0.0.1 ([ROOT]/foo/bar)
 [DOCUMENTING] bar v0.0.1 ([ROOT]/foo/bar)
 [RUNNING] `[..] rustc --crate-name bar --edition=2015 bar/src/lib.rs [..]--crate-type lib --emit=[..]link[..]-C codegen-units=5 [..]`
-[RUNNING] `rustdoc [..]--crate-name bar bar/src/lib.rs [..]
+[RUNNING] `[..] rustdoc [..]--crate-name bar bar/src/lib.rs [..]
 [RUNNING] `[..] rustc --crate-name bar --edition=2015 bar/src/lib.rs [..]--crate-type lib --emit=[..]metadata -C panic=abort[..]-C codegen-units=1 -C debuginfo=2 [..]`
 [COMPILING] bdep v0.0.1 ([ROOT]/foo/bdep)
 [RUNNING] `[..] rustc --crate-name bdep --edition=2015 bdep/src/lib.rs [..]--crate-type lib --emit=[..]link[..]-C codegen-units=5 [..]`
@@ -726,7 +724,7 @@ fn profile_selection_doc() {
 [RUNNING] `[..][ROOT]/foo/target/debug/build/foo-[HASH]/build-script-build`
 [foo 0.0.1] foo custom build PROFILE=debug DEBUG=true OPT_LEVEL=0
 [DOCUMENTING] foo v0.0.1 ([ROOT]/foo)
-[RUNNING] `rustdoc [..]--crate-name foo src/lib.rs [..]
+[RUNNING] `[..] rustdoc [..]--crate-name foo src/lib.rs [..]
 [FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
 [GENERATED] [ROOT]/foo/target/doc/foo/index.html
 

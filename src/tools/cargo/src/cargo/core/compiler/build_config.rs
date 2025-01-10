@@ -99,11 +99,6 @@ impl BuildConfig {
             },
         };
 
-        if gctx.cli_unstable().build_std.is_some() && requested_kinds[0].is_host() {
-            // TODO: This should eventually be fixed.
-            anyhow::bail!("-Zbuild-std requires --target");
-        }
-
         Ok(BuildConfig {
             requested_kinds,
             jobs,
@@ -159,6 +154,7 @@ pub enum MessageFormat {
 }
 
 /// The general "mode" for what to do.
+///
 /// This is used for two purposes. The commands themselves pass this in to
 /// `compile_ws` to tell it the general execution strategy. This influences
 /// the default targets selected. The other use is in the `Unit` struct

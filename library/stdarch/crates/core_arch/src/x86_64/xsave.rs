@@ -131,6 +131,7 @@ mod tests {
     use stdarch_test::simd_test;
 
     #[repr(align(64))]
+    #[derive(Debug)]
     struct XsaveArea {
         // max size for 256-bit registers is 800 bytes:
         // see https://software.intel.com/en-us/node/682996
@@ -144,31 +145,21 @@ mod tests {
             XsaveArea { data: [0; 2560] }
         }
         fn ptr(&mut self) -> *mut u8 {
-            &mut self.data[0] as *mut _ as *mut u8
+            self.data.as_mut_ptr()
         }
     }
 
     impl PartialEq<XsaveArea> for XsaveArea {
         fn eq(&self, other: &XsaveArea) -> bool {
             for i in 0..self.data.len() {
-                if self.data[i] != other.data[i] {
+                // Ignore XSTATE_BV (state-component bitmap) that occupies the first byte of the XSAVE Header
+                // (at offset 512 bytes from the start). The value may change, for more information see the following chapter:
+                // 13.7 OPERATION OF XSAVE - Intel® 64 and IA-32 Architectures Software Developer’s Manual.
+                if i != 512 && self.data[i] != other.data[i] {
                     return false;
                 }
             }
             true
-        }
-    }
-
-    impl fmt::Debug for XsaveArea {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "[")?;
-            for i in 0..self.data.len() {
-                write!(f, "{}", self.data[i])?;
-                if i != self.data.len() - 1 {
-                    write!(f, ", ")?;
-                }
-            }
-            write!(f, "]")
         }
     }
 

@@ -29,7 +29,7 @@ on if or how to run the test, what behavior to expect, and more. See
 [directives](directives.md) and the test suite documentation below for more details
 on these annotations.
 
-See the [Adding new tests](adding.md) and [Best practies](best-practiecs.md)
+See the [Adding new tests](adding.md) and [Best practies](best-practices.md)
 chapters for a tutorial on creating a new test and advice on writing a good
 test, and the [Running tests](running.md) chapter on how to run the test suite.
 
@@ -61,7 +61,6 @@ The following test suites are available, with links for more information:
 | [`codegen-units`](#codegen-units-tests)   | Check codegen unit partitioning                                                                                     |
 | [`assembly`](#assembly-tests)             | Check assembly output                                                                                               |
 | [`mir-opt`](#mir-opt-tests)               | Check MIR generation and optimizations                                                                              |
-| [`run-pass-valgrind`](#valgrind-tests)    | Run with Valgrind                                                                                                   |
 | [`coverage`](#coverage-tests)             | Check coverage instrumentation                                                                                      |
 | [`coverage-run-rustdoc`](#coverage-tests) | `coverage` tests that also run instrumented doctests                                                                |
 
@@ -273,6 +272,17 @@ the debugger currently being used:
 
 [`tests/debuginfo`]: https://github.com/rust-lang/rust/tree/master/tests/debuginfo
 
+> **Note on acquiring `cdb.exe` on Windows 11**
+>
+> `cdb.exe` is acquired alongside a suitable "Windows 11 SDK" which is part of
+> the "Desktop Development with C++" workload profile in a Visual Studio
+> installer (e.g. Visual Studio 2022 installer).
+>
+> **HOWEVER** this is not sufficient by default alone. If you need `cdb.exe`,
+> you must go to Installed Apps, find the newest "Windows Software Development
+> Kit" (and yes, this can still say `Windows 10.0.22161.3233` even though the OS
+> is called Windows 11). You must then click "Modify" -> "Change" and then
+> selected "Debugging Tools for Windows" in order to acquire `cdb.exe`.
 
 ### Codegen tests
 
@@ -283,6 +293,9 @@ check the generated code. See the [FileCheck] documentation for a tutorial and
 more information.
 
 See also the [assembly tests](#assembly-tests) for a similar set of tests.
+
+If you need to work with `#![no_std]` cross-compiling tests, consult the
+[`minicore` test auxiliary](./minicore.md) chapter.
 
 [`tests/codegen`]: https://github.com/rust-lang/rust/tree/master/tests/codegen
 [FileCheck]: https://llvm.org/docs/CommandGuide/FileCheck.html
@@ -303,6 +316,9 @@ assembly output. See the [FileCheck] documentation for a tutorial and more
 information.
 
 See also the [codegen tests](#codegen-tests) for a similar set of tests.
+
+If you need to work with `#![no_std]` cross-compiling tests, consult the
+[`minicore` test auxiliary](./minicore.md) chapter.
 
 [`tests/assembly`]: https://github.com/rust-lang/rust/tree/master/tests/assembly
 
@@ -445,21 +461,6 @@ some of the other tests for some examples on how to get started.
 [`tests/run-make`]: https://github.com/rust-lang/rust/tree/master/tests/run-make
 [`run_make_support`]: https://github.com/rust-lang/rust/tree/master/src/tools/run-make-support
 
-
-### Valgrind tests
-
-> **TODO**
->
-> Yeet this if we yeet the test suite.
-
-The tests in [`tests/run-pass-valgrind`] are for use with [Valgrind]. These are
-currently vestigial, as Valgrind is no longer used in CI. These may be removed
-in the future.
-
-[Valgrind]: https://valgrind.org/
-[`tests/run-pass-valgrind`]: https://github.com/rust-lang/rust/tree/master/tests/run-pass-valgrind
-
-
 ### Coverage tests
 
 The tests in [`tests/coverage`] are shared by multiple test modes that test
@@ -480,8 +481,9 @@ Each mode also has an alias to run the coverage tests in just that mode:
 ./x test coverage-map -- tests/coverage/if.rs # runs the specified test in "coverage-map" mode only
 ```
 
-If a test cannot be exercised in a particular coverage mode for some reason, you
-can use e.g. `ignore-mode-coverage-map`.
+If a particular test should not be run in one of the coverage test modes for
+some reason, use the `//@ ignore-coverage-map` or `//@ ignore-coverage-run`
+directives.
 
 #### `coverage-map` suite
 
@@ -691,7 +693,7 @@ also registered as an additional prefix for FileCheck directives:
 ```rust,ignore
 //@ revisions: NORMAL COVERAGE
 //@[COVERAGE] compile-flags: -Cinstrument-coverage
-//@[COVERAGE] needs-profiler-support
+//@[COVERAGE] needs-profiler-runtime
 
 // COVERAGE:   @__llvm_coverage_mapping
 // NORMAL-NOT: @__llvm_coverage_mapping
